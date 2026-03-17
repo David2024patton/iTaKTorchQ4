@@ -4,6 +4,8 @@ package loader
 
 import (
 	"fmt"
+	"os"
+	"sync"
 
 	"github.com/ebitengine/purego"
 )
@@ -17,9 +19,20 @@ func openLibrary(name string) (uintptr, error) {
 	return handle, nil
 }
 
-// setDllSearchPath is a no-op on non-Windows platforms.
-// On Linux/macOS, dlopen resolves dependencies from RPATH, LD_LIBRARY_PATH,
-// or already-loaded shared objects in the process.
+var ldPathOnce sync.Once
+
+// setDllSearchPath on Linux/macOS prepends the lib directory to LD_LIBRARY_PATH
+// so that dlopen and llama.cpp's BackendLoadAll can resolve CPU-optimized
+// backend variants (libggml-cpu-haswell.so, libggml-cpu-alderlake.so, etc.)
+// that live alongside the base libraries.
 func setDllSearchPath(dir string) {
-	// No-op on Linux/macOS.
+	ldPathOnce.Do(func() {
+		currentPath := os.Getenv("LD_LIBRARY_PATH")
+		if currentPath == "" {
+			os.Setenv("LD_LIBRARY_PATH", dir)
+		} else {
+			os.Setenv("LD_LIBRARY_PATH", dir+":"+currentPath)
+		}
+	})
 }
+

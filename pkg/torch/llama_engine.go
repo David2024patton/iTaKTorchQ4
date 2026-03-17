@@ -457,16 +457,8 @@ func (e *TorchEngine) Complete(ctx context.Context, messages []ChatMessage, para
 		for i, t := range goTokens {
 			tokens[i] = llama.Token(t)
 		}
-		// DEBUG: compare with FFI tokenization to catch encoding mismatches.
-		ffiTokens := llama.Tokenize(e.vocab, prompt, true, false)
-		if len(tokens) != len(ffiTokens) {
-			fmt.Printf("[iTaK Torch] TOKEN MISMATCH: Go=%d tokens, FFI=%d tokens\n", len(tokens), len(ffiTokens))
-		} else {
-			fmt.Printf("[iTaK Torch] Token count OK: %d tokens (Go == FFI)\n", len(tokens))
-		}
 	} else {
 		tokens = llama.Tokenize(e.vocab, prompt, true, false)
-		fmt.Printf("[iTaK Torch] FFI tokenized: %d tokens\n", len(tokens))
 	}
 
 	// Tokenize system prefix to find the token boundary for prefix caching.
