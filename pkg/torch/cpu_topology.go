@@ -62,42 +62,35 @@ func DetectCPUTopology() CPUTopology {
 }
 
 // DetectOptimalThreads returns the best thread count for inference
-// based on CPU topology and model size.
+// based on CPU topology and GPU offload status.
 //
-// Heuristics (validated on i9-13900K benchmarks):
-//   - Base: physical core count (avoids HT contention on shared L3)
-//   - Small models (<1GB): cap at physical/2 (fits in per-core L2)
-//   - Large models (>8GB): use full physical count (need bandwidth)
-//   - GPU offload: reduce CPU threads (GPU does the heavy lifting)
+// For CPU-only inference: use ALL physical cores. Quantized LLM matmul is
+// memory-bandwidth bound, so more threads = more memory bandwidth = faster.
+// Ollama uses this strategy and it's validated by their benchmarks.
+//
+// For GPU-offloaded inference: reduce CPU threads since the GPU does the
+// heavy lifting. CPU is mainly for tokenization, batch prep, and embedding.
 func DetectOptimalThreads(modelSizeMB int64, gpuLayers int) int {
 	topo := DetectCPUTopology()
+
+	// Start with physical core count to avoid HT cache contention.
 	threads := topo.PhysicalCores
 
-	// Hybrid architecture optimization:
-	// Prioritize P-cores. Using E-cores for inference usually hurts tail latency.
+	// Hybrid architecture: use ALL cores (P + E).
+	// E-cores contribute meaningful bandwidth on memory-bound inference.
+	// Modern llama.cpp schedules work across all core types effectively.
 	if topo.IsHybrid {
-		threads = topo.PerformanceCores
+		threads = topo.PhysicalCores // P + E cores total
 	}
 
-	// Small models benefit from fewer threads to avoid cache thrashing.
-	if modelSizeMB > 0 && modelSizeMB < 1024 {
-		half := topo.PhysicalCores / 2
-		if half < 2 {
-			half = 2
-		}
-		threads = half
-	}
-
-	// When GPU handles most layers, CPU threads are mainly for
-	// prompt tokenization and batch prep. No need for many.
+	// When GPU handles most layers, CPU is mainly for tokenization and
+	// batch prep. Use fewer threads to avoid CPU-GPU contention.
 	if gpuLayers > 0 {
 		gpuThreads := topo.PhysicalCores / 2
 		if gpuThreads < 2 {
 			gpuThreads = 2
 		}
-		if gpuThreads < threads {
-			threads = gpuThreads
-		}
+		threads = gpuThreads
 	}
 
 	// Clamp to valid range.
