@@ -1,0 +1,7 @@
+﻿goos: windows
+goarch: amd64
+pkg: github.com/David2024patton/iTaKTorch/pkg/torch/llama
+cpu: Intel(R) Core(TM) i9-14900K
+BenchmarkInference-32    	      38	 299634492 ns/op	       100.1 tokens/s
+PASS
+ok  	github.com/David2024patton/iTaKTorch/pkg/torch/llama	12.362s

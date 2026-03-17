@@ -1,0 +1,11 @@
+﻿goos: windows
+goarch: amd64
+pkg: github.com/David2024patton/iTaKTorch/pkg/torch/llama
+cpu: Intel(R) Core(TM) i9-14900K
+BenchmarkInference
+    testmain_test.go:75: ModelLoadFromFile failed: failed to load model
+--- FAIL: BenchmarkInference
+FAIL
+exit status 1
+FAIL	github.com/David2024patton/iTaKTorch/pkg/torch/llama	5.735s
+FAIL

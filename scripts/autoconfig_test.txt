@@ -1,0 +1,29 @@
+﻿=== RUN   TestDetectGPUs
+    auto_config_test.go:11: GPU Inventory:
+    auto_config_test.go:12:   HasNVIDIA: true
+    auto_config_test.go:13:   HasAMD:    false
+    auto_config_test.go:14:   HasIntel:  false
+    auto_config_test.go:15:   BestDiscreteIdx: 0
+    auto_config_test.go:16:   BestVRAMMiB:     16376
+    auto_config_test.go:19:   GPU: [0] NVIDIA GeForce RTX 4070 Ti SUPER (nvidia, 16376 MiB)
+--- PASS: TestDetectGPUs (0.05s)
+=== RUN   TestAutoConfigSmallModel
+    auto_config_test.go:30: AutoConfig (no model): backend=vulkan gpu_layers=999 threads=8 device= fits_gpu=true | model=0.0GB | vram_needed~0MiB | cpu=16P/32L cores | gpu[0]=nvidia(16376MiB) | NVIDIA 16376MiB >= needed 0MiB -> full GPU offload (Vulkan preferred)
+--- PASS: TestAutoConfigSmallModel (0.05s)
+=== RUN   TestAutoConfigWithModel
+    auto_config_test.go:41: AutoConfig (8B model): backend=vulkan gpu_layers=999 threads=8 device= fits_gpu=true | model=4.6GB | vram_needed~6099MiB | cpu=16P/32L cores | gpu[0]=nvidia(16376MiB) | NVIDIA 16376MiB >= needed 6099MiB -> full GPU offload (Vulkan preferred)
+
+=== AUTO-CONFIG RECOMMENDATION ===
+Backend:      vulkan
+GPU Layers:   999
+Threads:      8
+GPU Device:   
+Model Fits:   true
+Lib Dir:      _vulkan
+Reason:       model=4.6GB | vram_needed~6099MiB | cpu=16P/32L cores | gpu[0]=nvidia(16376MiB) | NVIDIA 16376MiB >= needed 6099MiB -> full GPU offload (Vulkan preferred)
+--- PASS: TestAutoConfigWithModel (0.05s)
+=== RUN   TestRecommendLibPath
+    auto_config_test.go:56: Recommended lib path: "" (backend=vulkan)
+--- PASS: TestRecommendLibPath (0.05s)
+PASS
+ok  	github.com/David2024patton/iTaKTorch/pkg/torch	0.859s

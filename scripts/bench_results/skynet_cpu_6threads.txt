@@ -1,0 +1,31 @@
+=== TORCH BENCHMARK: cpu_6threads ===
+Machine: Skynet (Dell Mini PC, Ubuntu)
+CPU: Intel(R) Core(TM) i7-8700T CPU @ 2.40GHz (12 threads)
+GPU: Intel UHD 630 (iGPU, NO CUDA)
+RAM: 15Gi
+Model: Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf (~4.9GB)
+Library: /home/skynet/torch_lib
+GPU Layers: 0 (CPU only)
+Threads: 6 (0 = auto)
+Context: 4096
+
+--- BENCHMARK OUTPUT ---
+goos: linux
+goarch: amd64
+pkg: github.com/David2024patton/iTaKTorch/pkg/torch/llama
+cpu: Intel(R) Core(TM) i7-8700T CPU @ 2.40GHz
+BenchmarkInference-12    	       7	4668604812 ns/op	         6.640 tokens/s
+PASS
+ok  	github.com/David2024patton/iTaKTorch/pkg/torch/llama	47.363s
+
+--- RESOURCES BEFORE ---
+RAM: 4861MB / 15785MB
+
+--- RESOURCES AFTER ---
+RAM: 5324MB / 15785MB
+
+--- RESOURCES DURING (sampled every 3s) ---
+Avg RAM Used:   9238 MB
+Peak RAM Used:  10357 MB
+Avg CPU Usage:  54.6%
+Samples:        15

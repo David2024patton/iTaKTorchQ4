@@ -1,0 +1,37 @@
+﻿=== TORCH BENCHMARK: cuda_cpu_fallback ===
+Machine: Beast (Windows)
+CPU: Intel i9-14900K (24C/32T)
+GPU: NVIDIA RTX 4070 Ti SUPER (16GB)
+iGPU: Intel UHD 770
+RAM: 64GB DDR5
+Model: Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf (~4.9GB)
+Library: e:\.agent\iTaK Eco\Torch\lib\windows_amd64_cuda
+GPU Layers: 0
+Context: 4096
+Date: 2026-03-10_13-28
+
+--- BENCHMARK OUTPUT ---
+goos: windows
+goarch: amd64
+pkg: github.com/David2024patton/iTaKTorch/pkg/torch/llama
+cpu: Intel(R) Core(TM) i9-14900K
+BenchmarkInference-32    	      10	3034332200 ns/op	        10.22 tokens/s
+PASS
+ok  	github.com/David2024patton/iTaKTorch/pkg/torch/llama	33.312s
+
+
+--- RESOURCES BEFORE ---
+RAM: 53.78GB / 127.78GB
+GPU: 16 %, 1021 MiB, 16376 MiB, 34
+
+--- RESOURCES AFTER ---
+RAM: 52.92GB / 127.78GB
+GPU: 10 %, 1030 MiB, 16376 MiB, 33
+
+--- RESOURCES DURING (sampled every 3s) ---
+Avg RAM Used:     N/A GB
+Peak RAM Used:    N/A GB
+Avg GPU Util:     N/A%
+Peak VRAM Used:   N/A MB
+Avg GPU Temp:     N/AC
+Samples:          0

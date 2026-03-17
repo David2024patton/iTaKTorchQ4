@@ -1,0 +1,6 @@
+﻿--- FAIL: BenchmarkInference
+    testmain_test.go:75: ModelLoadFromFile failed: failed to load model
+FAIL
+exit status 1
+FAIL	github.com/David2024patton/iTaKTorch/pkg/torch/llama	5.058s
+FAIL

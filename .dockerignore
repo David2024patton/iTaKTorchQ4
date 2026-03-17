@@ -1,0 +1,10 @@
+**/*.gguf
+**/*.bin
+**/*.safetensors
+models/
+**/models/
+tmp/
+.git/
+.agent/
+*.exe
+**/*.exe

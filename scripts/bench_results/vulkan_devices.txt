@@ -1,0 +1,32 @@
+﻿=== RUN   TestGGMLBackendDevCount
+ggml_vulkan: Found 2 Vulkan devices:
+ggml_vulkan: 0 = NVIDIA GeForce RTX 4070 Ti SUPER (NVIDIA) | uma: 0 | fp16: 1 | bf16: 1 | warp size: 32 | shared memory: 49152 | int dot: 1 | matrix cores: NV_coopmat2
+ggml_vulkan: 1 = Intel(R) UHD Graphics 770 (Intel Corporation) | uma: 1 | fp16: 1 | bf16: 0 | warp size: 32 | shared memory: 32768 | int dot: 1 | matrix cores: none
+    ggml_test.go:10: GGMLBackendDeviceCount returned: 3
+--- PASS: TestGGMLBackendDevCount (0.11s)
+=== RUN   TestGGMLBackendDeviceGet
+    ggml_test.go:28: GGMLBackendDeviceGet(0) returned: 1893637755552
+--- PASS: TestGGMLBackendDeviceGet (0.00s)
+=== RUN   TestGGMLBackendDeviceByType
+    ggml_test.go:40: GGMLBackendDeviceByType(GGMLBackendDeviceTypeCPU) returned: 140715535822880
+--- PASS: TestGGMLBackendDeviceByType (0.00s)
+=== RUN   TestGGMLBackendDeviceByName
+    ggml_test.go:57: GGMLBackendDeviceByName("CPU") returned: 140715535822880
+--- PASS: TestGGMLBackendDeviceByName (0.00s)
+=== RUN   TestGGMLBackendDeviceName
+    ggml_test.go:79: GGMLBackendDeviceName returned: Vulkan0
+--- PASS: TestGGMLBackendDeviceName (0.00s)
+=== RUN   TestGGMLBackendRegCount
+    ggml_test.go:88: GGMLBackendRegCount returned: 2
+--- PASS: TestGGMLBackendRegCount (0.00s)
+=== RUN   TestGGMLBackendRegGet
+    ggml_test.go:106: GGMLBackendRegGet(0) returned: 140712636511584
+--- PASS: TestGGMLBackendRegGet (0.00s)
+=== RUN   TestGGMLBackendRegByName
+    ggml_test.go:117: GGMLBackendRegByName("CPU") returned: 140715535823016
+--- PASS: TestGGMLBackendRegByName (0.00s)
+=== RUN   TestGGMLBackendUnload
+    ggml_test.go:135: GGMLBackendUnload succeeded for reg: 140712636511584
+--- PASS: TestGGMLBackendUnload (0.00s)
+PASS
+ok  	github.com/David2024patton/iTaKTorch/pkg/torch/llama	0.502s

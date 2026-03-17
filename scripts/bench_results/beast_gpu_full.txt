@@ -1,0 +1,37 @@
+﻿=== TORCH BENCHMARK: gpu_full ===
+Machine: Beast (Windows)
+CPU: Intel i9-14900K (24C/32T)
+GPU: NVIDIA RTX 4070 Ti SUPER (16GB)
+iGPU: Intel UHD 770
+RAM: 64GB DDR5
+Model: Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf (~4.9GB)
+Library: e:\.agent\iTaK Eco\Torch\lib\windows_amd64_cuda
+GPU Layers: 99
+Context: 4096
+Date: 2026-03-10_13-28
+
+--- BENCHMARK OUTPUT ---
+goos: windows
+goarch: amd64
+pkg: github.com/David2024patton/iTaKTorch/pkg/torch/llama
+cpu: Intel(R) Core(TM) i9-14900K
+BenchmarkInference-32    	     156	 230931781 ns/op	       134.2 tokens/s
+PASS
+ok  	github.com/David2024patton/iTaKTorch/pkg/torch/llama	38.779s
+
+
+--- RESOURCES BEFORE ---
+RAM: 53.91GB / 127.78GB
+GPU: 19 %, 1019 MiB, 16376 MiB, 31
+
+--- RESOURCES AFTER ---
+RAM: 53.77GB / 127.78GB
+GPU: 2 %, 1022 MiB, 16376 MiB, 47
+
+--- RESOURCES DURING (sampled every 3s) ---
+Avg RAM Used:     N/A GB
+Peak RAM Used:    N/A GB
+Avg GPU Util:     N/A%
+Peak VRAM Used:   N/A MB
+Avg GPU Temp:     N/AC
+Samples:          0

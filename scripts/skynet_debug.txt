@@ -1,0 +1,11 @@
+goos: linux
+goarch: amd64
+pkg: github.com/David2024patton/iTaKTorch/pkg/torch/llama
+cpu: Intel(R) Core(TM) i7-8700T CPU @ 2.40GHz
+BenchmarkInference
+    helpers_test.go:79: unable to load library C:UsersDavid/torch_lib/libggml.so: error loading library: C:UsersDavid/torch_lib/libggml.so: cannot open shared object file: No such file or directory
+--- FAIL: BenchmarkInference
+FAIL
+exit status 1
+FAIL	github.com/David2024patton/iTaKTorch/pkg/torch/llama	0.003s
+FAIL

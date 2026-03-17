@@ -1,0 +1,55 @@
+=== WSL2 CRASH TEST ===
+Go: go version go1.26.0 linux/amd64
+Lib: /mnt/e/.agent/iTaK Eco/Torch/lib/linux_amd64
+
+--- go vet ---
+VET_EXIT=0
+
+--- TestBackendInit ---
+testing: warning: no tests to run
+PASS
+ok  	github.com/David2024patton/iTaKTorch/pkg/torch/llama	0.003s [no tests to run]
+BACKEND_EXIT=0
+
+--- TestGGML ---
+=== RUN   TestGGMLBackendDevCount
+load_backend: loaded CPU backend from /mnt/e/.agent/iTaK Eco/Torch/lib/linux_amd64/libggml-cpu-alderlake.so
+    ggml_test.go:10: GGMLBackendDeviceCount returned: 1
+--- PASS: TestGGMLBackendDevCount (0.51s)
+=== RUN   TestGGMLBackendDeviceGet
+load_backend: loaded CPU backend from /mnt/e/.agent/iTaK Eco/Torch/lib/linux_amd64/libggml-cpu-alderlake.so
+    ggml_test.go:28: GGMLBackendDeviceGet(0) returned: 132920513113536
+--- PASS: TestGGMLBackendDeviceGet (0.14s)
+=== RUN   TestGGMLBackendDeviceByType
+load_backend: loaded CPU backend from /mnt/e/.agent/iTaK Eco/Torch/lib/linux_amd64/libggml-cpu-alderlake.so
+    ggml_test.go:40: GGMLBackendDeviceByType(GGMLBackendDeviceTypeCPU) returned: 132920513113536
+--- PASS: TestGGMLBackendDeviceByType (0.13s)
+=== RUN   TestGGMLBackendDeviceByName
+load_backend: loaded CPU backend from /mnt/e/.agent/iTaK Eco/Torch/lib/linux_amd64/libggml-cpu-alderlake.so
+    ggml_test.go:57: GGMLBackendDeviceByName("CPU") returned: 132920513113536
+--- PASS: TestGGMLBackendDeviceByName (0.15s)
+=== RUN   TestGGMLBackendDeviceName
+load_backend: loaded CPU backend from /mnt/e/.agent/iTaK Eco/Torch/lib/linux_amd64/libggml-cpu-alderlake.so
+    ggml_test.go:79: GGMLBackendDeviceName returned: CPU
+--- PASS: TestGGMLBackendDeviceName (0.14s)
+=== RUN   TestGGMLBackendRegCount
+load_backend: loaded CPU backend from /mnt/e/.agent/iTaK Eco/Torch/lib/linux_amd64/libggml-cpu-alderlake.so
+    ggml_test.go:88: GGMLBackendRegCount returned: 6
+--- PASS: TestGGMLBackendRegCount (0.15s)
+=== RUN   TestGGMLBackendRegGet
+load_backend: loaded CPU backend from /mnt/e/.agent/iTaK Eco/Torch/lib/linux_amd64/libggml-cpu-alderlake.so
+    ggml_test.go:106: GGMLBackendRegGet(0) returned: 132920513113472
+--- PASS: TestGGMLBackendRegGet (0.14s)
+=== RUN   TestGGMLBackendRegByName
+load_backend: loaded CPU backend from /mnt/e/.agent/iTaK Eco/Torch/lib/linux_amd64/libggml-cpu-alderlake.so
+    ggml_test.go:117: GGMLBackendRegByName("CPU") returned: 132920513113472
+--- PASS: TestGGMLBackendRegByName (0.15s)
+=== RUN   TestGGMLBackendUnload
+load_backend: loaded CPU backend from /mnt/e/.agent/iTaK Eco/Torch/lib/linux_amd64/libggml-cpu-alderlake.so
+    ggml_test.go:135: GGMLBackendUnload succeeded for reg: 132920513113472
+--- PASS: TestGGMLBackendUnload (0.15s)
+PASS
+ok  	github.com/David2024patton/iTaKTorch/pkg/torch/llama	1.661s
+GGML_EXIT=0
+
+=== DONE ===

@@ -1,0 +1,16 @@
+=== WSL2 BENCHMARK ===
+Go: go version go1.26.0 linux/amd64
+Lib: /mnt/e/.agent/iTaK Eco/Torch/lib/linux_amd64
+Model: /mnt/e/.agent/GOAgent/models/qwen2.5-0.5b-instruct-q4_k_m.gguf
+
+--- BenchmarkInference ---
+goos: linux
+goarch: amd64
+pkg: github.com/David2024patton/iTaKTorch/pkg/torch/llama
+cpu: Intel(R) Core(TM) i9-14900K
+BenchmarkInference-8   	      22	 580992142 ns/op	        51.64 tokens/s
+PASS
+ok  	github.com/David2024patton/iTaKTorch/pkg/torch/llama	30.703s
+BENCH_EXIT=0
+
+=== DONE ===

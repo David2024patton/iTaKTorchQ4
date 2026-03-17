@@ -1,0 +1,22 @@
+# Build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+*.a
+*.o
+
+# Executables
+itaktorch
+itaktorch-*
+test_torch*
+torch.test*
+
+# Outputs
+*_out*.txt
+test_output.txt
+wgpu_build*.txt
+
+# Massive Directories
+models/
+lib/
