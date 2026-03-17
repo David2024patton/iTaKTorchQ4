@@ -528,9 +528,14 @@ func (e *NativeEngine) forward(tokenIDs []int) []float32 {
 
 	var logits *Tensor
 	if e.gpu != nil && e.gpu.IsAvailable() {
+		// e.lmHead is [vocabSize, hiddenDim], lastHidden is [hiddenDim].
+		// MatVecMulGPU expects A_cols == x_len
 		logits = e.gpu.MatVecMulGPU(e.lmHead, lastHidden)
 	} else {
-		logits = MatVecMul(e.lmHead, lastHidden)
+		// Use safeMatMul which handles shape broadcasting and fixes transposition
+		logits = safeMatMul(e.lmHead, lastHidden, e.vocabSize)
+		// Ensure output shape is exactly a 1D vector of logits [vocabSize]
+		logits.Shape = []int{e.vocabSize}
 	}
 	return logits.Data
 }

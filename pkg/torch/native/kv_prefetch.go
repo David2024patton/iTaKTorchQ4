@@ -87,7 +87,7 @@ func (pm *PrefetchManager) RegisterBlock(prefixTokens []int32, gpuIndex int, siz
 	blockID := hex.EncodeToString(hasher.Sum(nil))
 	
 	pm.mu.Lock()
-	defer pm.mu.Lock()
+	defer pm.mu.Unlock()
 	
 	pm.blockMap[blockID] = &KVBlockMeta{
 		BlockID:     blockID,
