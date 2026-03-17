@@ -783,39 +783,10 @@ func (e *TorchEngine) generateFromTokensLocked(ctx context.Context, prompt strin
 			llama.Synchronize(e.ctx)
 		}
 
-		// Sample next token (reads GPU results, must be after Synchronize).
-		sampleStart := time.Now()
-
-		var token llama.Token
-		// ZERO-CGO SAMPLER:
-		// 1. Extract raw Logits via Shared Memory Pointer (No CGO Penalty)
-		nVocab := int(llama.VocabNTokens(e.vocab))
-		// -1 gets the logits for the last token in the batch
-		logits, err := llama.GetLogitsIth(e.ctx, -1, nVocab)
-
-		if err == nil && len(logits) > 0 {
-			// 2. Phase 7B: Unsafe Pointer Arithmetic ArgMax
-			// Bypasses Go's per-element bounds checking on the ~151k vocab scan.
-			// Direct pointer math: ptr + i*sizeof(float32) for raw memory traversal.
-			var maxVal float32 = -1e9
-			var maxIdx int32 = 0
-			basePtr := unsafe.Pointer(&logits[0])
-			for j := 0; j < nVocab; j++ {
-				val := *(*float32)(unsafe.Add(basePtr, uintptr(j)*4))
-				if val > maxVal {
-					maxVal = val
-					maxIdx = int32(j)
-				}
-			}
-			token = llama.Token(maxIdx)
-			// Inform the C++ sampler of the accepted token to keep internal state (like penalties) synced
-			llama.SamplerAccept(e.sampler, token)
-		} else {
-			// Fallback to FFI Sampler if shared memory extraction fails
-			token = llama.SamplerSample(e.sampler, e.ctx, -1)
-		}
-
-		LogTrace("PureGo Sampler took %v", time.Since(sampleStart))
+		// Sample next token from the FFI sampler (keeps computation on GPU).
+		// Using SamplerSample() directly avoids GPU->CPU logits transfer
+		// and Go-side argmax over 151k vocabulary on every token.
+		token := llama.SamplerSample(e.sampler, e.ctx, -1)
 
 		// Check for end of generation.
 		if e.isEOG(token) {
@@ -824,9 +795,7 @@ func (e *TorchEngine) generateFromTokensLocked(ctx context.Context, prompt strin
 
 		// Convert token to text.
 		// Phase 4A: Go-native lookup (zero FFI, zero alloc via string interning).
-		textStart := time.Now()
 		piece := e.tokenToText(token)
-		LogTrace("TokenToText took %v", time.Since(textStart))
 		if len(piece) > 0 {
 			result.WriteString(piece)
 			completionTokens++

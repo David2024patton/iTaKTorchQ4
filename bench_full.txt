@@ -1,0 +1,2 @@
+﻿[GOTensor] Model: arch=qwen2 vocab=32000 hidden=896 heads=14 kv_heads=2 layers=24 ffn=4864
+Output:      

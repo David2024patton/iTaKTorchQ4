@@ -1,0 +1,73 @@
+﻿[GOTensor] Model: arch=qwen2 vocab=32000 hidden=896 heads=14 kv_heads=2 layers=24 ffn=4864
+go : panic: 
+MatVecMul: 
+dimension 
+mismatch: 
+A[896,151936] * 
+v[896]
+At line:1 char:1
++ go run 
+debug_infer.go > 
+panic_clean.txt 
+2>&1
++ ~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~
+~~~~~~~~
+    + CategoryInfo 
+             : No  
+  tSpecified: (p   
+ anic: MatVecMu    
+...51936] * v[    
+896]:String) [    
+], RemoteExcep    
+tion
+    + FullyQualifi 
+   edErrorId : Na  
+  tiveCommandErr   
+ or
+ 
+
+goroutine 1 
+[running]:
+github.com/David202
+4patton/iTaKTorch/p
+kg/torch/native.Mat
+VecMul(0x3786a1a8af
+0?, 0x3786a1bdae8)
+	E:/.agent/iTaK Eco
+/Torch/pkg/torch/na
+tive/matmul.go:92 
++0x299
+github.com/David202
+4patton/iTaKTorch/p
+kg/torch/native.(*N
+ativeEngine).forwar
+d(0x3786a27c000, 
+{0x37868caa840, 
+0x6, 
+0x7ff601b08598?})
+	E:/.agent/iTaK Eco
+/Torch/pkg/torch/na
+tive/engine.go:533 
++0x8ed
+github.com/David202
+4patton/iTaKTorch/p
+kg/torch/native.(*N
+ativeEngine).Comple
+te(0x3786a27c000, 
+{0x7ff601b192b0, 
+0x7ff601c725e0}, 
+{0x3786a1bdf18, 
+0x1, 
+0x37868d8a000?}, 
+{0x5, 0x0, 0x0, 
+{0x0, ...}})
+	E:/.agent/iTaK Eco
+/Torch/pkg/torch/na
+tive/engine.go:379 
++0x632
+main.main()
+	E:/.agent/iTaK Eco
+/Torch/debug_infer.
+go:15 +0xb3
+exit status 2

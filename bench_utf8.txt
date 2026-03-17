@@ -1,0 +1,6 @@
+﻿Model: qwen2.5-0.5b-instruct-q4_k_m.gguf (0.5 GB)
+Mode: dense
+Loading...[GOTensor] Model: arch=qwen2 vocab=32000 hidden=896 heads=14 kv_heads=2 layers=24 ffn=4864
+ done in 36.3650244s
+RAM used: 2644 MB
+Running inference...
