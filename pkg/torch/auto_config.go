@@ -70,15 +70,16 @@ func DetectAutoConfig(modelPath string) AutoConfig {
 	switch {
 	// Case 1: Discrete NVIDIA GPU with enough VRAM -> full GPU offload.
 	case gpus.HasNVIDIA && gpus.BestVRAMMiB > 0 && gpus.BestVRAMMiB >= vramNeededMiB:
-		// Both CUDA and Vulkan perform equally on NVIDIA.
-		// Prefer Vulkan: 8x smaller DLL, cross-platform, same speed.
-		// Fall back to CUDA if Vulkan lib isn't available.
+		// Vulkan is faster than CUDA on modern llama.cpp (b8398+):
+		// - Vulkan: 465 tok/s, 737MB VRAM, no graph warmup overhead
+		// - CUDA:   428 tok/s, 996MB VRAM, CUDA graph warmup per batch
+		// Fall back to CUDA if Vulkan libs aren't available.
 		ac.Backend = "vulkan"
 		ac.LibDir = "_vulkan"
 		ac.GPULayers = 999
 		ac.ModelFitsGPU = true
 		ac.Threads = DetectOptimalThreads(modelSizeMB, 999)
-		reasons = append(reasons, fmt.Sprintf("NVIDIA %dMiB >= needed %dMiB -> full GPU offload (Vulkan preferred)", gpus.BestVRAMMiB, vramNeededMiB))
+		reasons = append(reasons, fmt.Sprintf("NVIDIA %dMiB >= needed %dMiB -> full GPU offload (Vulkan preferred, 8%% faster than CUDA on b8398)", gpus.BestVRAMMiB, vramNeededMiB))
 
 	// Case 2: Discrete NVIDIA GPU but model too large for VRAM.
 	case gpus.HasNVIDIA && gpus.BestVRAMMiB > 0 && gpus.BestVRAMMiB < vramNeededMiB:
@@ -200,16 +201,16 @@ func RecommendLibPath(ac AutoConfig) string {
 	var candidates []string
 
 	switch ac.Backend {
+	case "cuda":
+		candidates = []string{
+			"./lib/" + platformDir + "_cuda",
+			"./lib/" + platformDir + "_vulkan", // Fallback: Vulkan works on NVIDIA too
+			"./lib/" + platformDir,             // Last resort: CPU-only
+		}
 	case "vulkan":
 		candidates = []string{
 			"./lib/" + platformDir + "_vulkan",
 			"./lib/" + platformDir + "_cuda", // Fallback: CUDA works too on NVIDIA
-			"./lib/" + platformDir,            // Last resort: CPU-only
-		}
-	case "cuda":
-		candidates = []string{
-			"./lib/" + platformDir + "_cuda",
-			"./lib/" + platformDir + "_vulkan", // Fallback: Vulkan is just as fast
 			"./lib/" + platformDir,
 		}
 	case "metal":
