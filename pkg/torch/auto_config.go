@@ -204,29 +204,40 @@ func ApplyAutoConfig(opts *EngineOpts, modelPath string) AutoConfig {
 	}
 
 	// Auto-detect draft model for speculative decoding.
-	// Looks for small models (< 2GB) in the same directory as the main model.
-	// Only activates if user didn't explicitly set a draft model.
-	if opts.DraftModelPath == "" && modelPath != "" {
-		dir := filepath.Dir(modelPath)
-		draftPath := findDraftModel(dir, modelPath)
-		if draftPath != "" {
-			opts.DraftModelPath = draftPath
-			if opts.SpeculativeTokens <= 0 {
-				opts.SpeculativeTokens = 5
-			}
-			fmt.Printf("[iTaK Torch] Auto-detected draft model: %s (speculative decoding with %d tokens)\n",
-				filepath.Base(draftPath), opts.SpeculativeTokens)
-		}
-	}
+	// NOTE: Currently disabled for auto-detect because speculative decoding
+	// requires the serve inference path (batch logits setup). The bench tool's
+	// BatchGetOne path doesn't set logits flags correctly for multi-token verification.
+	// Use --draft-model explicitly with the serve command to enable spec decode.
+	// TODO: Enable auto-detect once bench integration is complete.
+	// if opts.DraftModelPath == "" && modelPath != "" {
+	// 	dir := filepath.Dir(modelPath)
+	// 	draftPath := findDraftModel(dir, modelPath)
+	// 	if draftPath != "" {
+	// 		opts.DraftModelPath = draftPath
+	// 		if opts.SpeculativeTokens <= 0 {
+	// 			opts.SpeculativeTokens = 5
+	// 		}
+	// 		fmt.Printf("[iTaK Torch] Auto-detected draft model: %s (speculative decoding with %d tokens)\n",
+	// 			filepath.Base(draftPath), opts.SpeculativeTokens)
+	// 	}
+	// }
 
 	return ac
 }
 
-// findDraftModel scans the models directory for a small GGUF file (<2GB)
-// suitable as a draft model for speculative decoding. Returns empty string
-// if no suitable draft model is found.
+// findDraftModel scans the models directory for a small GGUF file
+// suitable as a draft model for speculative decoding. The draft model
+// must be smaller than the main model and under 2GB. Returns empty
+// string if no suitable draft model is found.
 func findDraftModel(dir string, mainModelPath string) string {
 	const maxDraftSize int64 = 2 * 1024 * 1024 * 1024 // 2GB
+
+	// Get the main model's size so we only pick drafts that are smaller.
+	mainInfo, err := os.Stat(mainModelPath)
+	if err != nil {
+		return ""
+	}
+	mainSize := mainInfo.Size()
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -251,8 +262,8 @@ func findDraftModel(dir string, mainModelPath string) string {
 		if err != nil {
 			continue
 		}
-		// Draft model must be small and smaller than any previously found.
-		if info.Size() > 0 && info.Size() < maxDraftSize {
+		// Draft must be: non-empty, under 2GB, AND smaller than the main model.
+		if info.Size() > 0 && info.Size() < maxDraftSize && info.Size() < mainSize {
 			if bestPath == "" || info.Size() < bestSize {
 				bestPath = filepath.Join(dir, name)
 				bestSize = info.Size()

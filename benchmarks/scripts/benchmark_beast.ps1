@@ -23,12 +23,12 @@ param(
     [ValidateSet("boot", "ttft", "matrix", "throughput", "resources", "threads", "batching", "unit", "all")]
     [string]$Category = "all",
 
-    [string]$Model = "E:\.agent\GOAgent\models\qwen2.5-0.5b-instruct-q4_k_m.gguf",
+    [string]$Model = "E:\.agent\iTaK Eco\Torch\models\qwen2.5-0.5b-instruct-q4_k_m.gguf",
     [string]$HfModel = "Qwen/Qwen2.5-0.5B-Instruct",
     [string]$OllamaModel = "qwen2.5:0.5b",
     [int]$Iterations = 3,
-    [string]$OutputDir = "E:\.agent\GOAgent\benchmarks\results",
-    [string]$ProjectDir = "E:\.agent\GOAgent"
+    [string]$OutputDir = "E:\.agent\iTaK Eco\Torch\benchmarks\results",
+    [string]$ProjectDir = "E:\.agent\iTaK Eco\Torch"
 )
 
 $ErrorActionPreference = "Continue"
