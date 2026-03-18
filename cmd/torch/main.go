@@ -61,9 +61,21 @@ func main() {
 	}
 }
 
-func printUsage() {
-	fmt.Println(`torch - Go-Native LLM Inference Engine
+func printBanner() {
+	fmt.Println("\033[36m" + `
+  _  _____       _  __   _____               _     
+ (_)|_   _|     | |/ /  |_   _|             | |    
+  _   | |  __ _ | ' /     | |   ___  _ __ __| |__  
+ | |  | | / _` + "`" + ` ||  <      | |  / _ \| '__/ __| '_ \ 
+ | |  | || (_| || . \     | | | (_) | | | (__| | | |
+ |_|  \_/ \__,_||_|\_\    \_/  \___/|_|  \___|_| |_|
+` + "\033[0m")
+}
 
+func printUsage() {
+	printBanner()
+	fmt.Println("  \033[1mGo-Native LLM Inference Engine\033[0m")
+	fmt.Println(`
 Usage:
   torch <command> [options]
 
@@ -356,22 +368,27 @@ func cmdModels() {
 		return
 	}
 
-	fmt.Printf("Cached models (%s):\n\n", mgr.CacheDir())
+	printBanner()
+	fmt.Printf("\033[1mCached models\033[0m (%s):\n\n", mgr.CacheDir())
+	fmt.Printf("  \033[36m%-40s  %-10s  %-12s\033[0m\n", "NAME", "SIZE", "LAST USED")
+	fmt.Printf("  \033[36m%-40s  %-10s  %-12s\033[0m\n", strings.Repeat("-", 40), strings.Repeat("-", 10), strings.Repeat("-", 12))
 	for _, m := range models {
 		sizeMB := m.Size / 1024 / 1024
 		fmt.Printf("  %-40s  %6d MB  %s\n", m.Name, sizeMB, m.LastUsed.Format("2006-01-02"))
 	}
+	fmt.Println()
 }
 
 func cmdCatalog() {
 	catalog := torch.CuratedModels()
-	fmt.Println("torch Model Catalog:")
+	printBanner()
+	fmt.Println("  \033[1mModel Catalog\033[0m")
 	fmt.Println()
 
 	// Group by family.
 	lastFamily := ""
-	fmt.Printf("  %-30s  %-8s  %-8s  %-10s  %-8s  %-5s  %s\n", "NAME", "PARAMS", "SIZE", "ROLE", "FAMILY", "DRAFT", "NOTES")
-	fmt.Printf("  %-30s  %-8s  %-8s  %-10s  %-8s  %-5s  %s\n", "----", "------", "----", "----", "------", "-----", "-----")
+	fmt.Printf("  \033[36m%-30s  %-8s  %-8s  %-10s  %-8s  %-5s  %s\033[0m\n", "NAME", "PARAMS", "SIZE", "ROLE", "FAMILY", "DRAFT", "NOTES")
+	fmt.Printf("  \033[36m%-30s  %-8s  %-8s  %-10s  %-8s  %-5s  %s\033[0m\n", strings.Repeat("-", 30), strings.Repeat("-", 8), strings.Repeat("-", 8), strings.Repeat("-", 10), strings.Repeat("-", 8), strings.Repeat("-", 5), strings.Repeat("-", 5))
 	for _, m := range catalog {
 		if m.Family != lastFamily {
 			if lastFamily != "" {
@@ -1228,16 +1245,25 @@ func cmdScan(args []string) {
 				}
 				return nil
 			}
+			
+			// Optional progress spinner (shows briefly)
+			if modelCount%50 == 0 {
+				fmt.Printf("\r\033[K[\033[36m...\033[0m] Scanning files... [ %s ]", d.Name())
+			}
+
 			if !d.IsDir() && strings.HasSuffix(strings.ToLower(d.Name()), ".gguf") {
 				dir := filepath.Dir(path)
 				if !foundDirs[dir] {
 					foundDirs[dir] = true
-					fmt.Printf("[iTaK Torch] Found model directory: %s\n", dir)
+					fmt.Printf("\r\033[K[\033[32miTaK Torch\033[0m] Found model directory: %s\n", dir)
 				}
 				modelCount++
 			}
 			return nil
 		})
+
+		// Clear the status line
+		fmt.Print("\r\033[K")
 
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error scanning %s: %v\n", startDir, err)
