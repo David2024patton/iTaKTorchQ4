@@ -144,12 +144,17 @@ func ApplyAutoConfig(opts *EngineOpts, modelPath string) AutoConfig {
 		opts.Backend = ac.Backend
 	}
 
-	if opts.GPULayers == 0 && ac.GPULayers > 0 {
-		// User didn't specify GPU layers and we recommend GPU offload.
+	if opts.GPULayers < 0 && ac.GPULayers > 0 {
+		// User didn't specify GPU layers (sentinel -1) and we recommend GPU offload.
 		// Only auto-offload if the model fits. Never auto-split.
 		if ac.ModelFitsGPU {
 			opts.GPULayers = ac.GPULayers
+		} else {
+			opts.GPULayers = 0
 		}
+	} else if opts.GPULayers < 0 {
+		// User didn't specify, no GPU recommendation.
+		opts.GPULayers = 0
 	}
 
 	if opts.Threads == 0 {

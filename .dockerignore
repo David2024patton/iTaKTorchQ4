@@ -1,10 +1,25 @@
-**/*.gguf
-**/*.bin
-**/*.safetensors
+# Large model files
 models/
-**/models/
-tmp/
+*.gguf
+
+# Build artifacts (but keep the Linux binary)
+itaktorch_win.exe
+*.log
+
+# Git
 .git/
-.agent/
-*.exe
-**/*.exe
+
+# IDE
+.vscode/
+.idea/
+
+# Debug files
+debug_infer.go
+panic.log
+panic_clean*.txt
+bench_*.txt
+
+# Windows-only libs (not needed in Linux container)
+lib/windows_amd64/
+lib/windows_amd64_vulkan/
+lib/windows_amd64_cuda/

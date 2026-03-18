@@ -619,6 +619,10 @@ func (e *TorchEngine) generateFromTokensLocked(ctx context.Context, prompt strin
 	completionTokens := 0
 	hasStopSequences := len(params.Stop) > 0
 
+	// Pre-allocate a reusable single-token slice for the decode batch.
+	// This avoids allocating a new []Token{token} on every iteration.
+	singleToken := make([]llama.Token, 1)
+
 	// Speculative decoding counters.
 	specDraftTotal := 0
 	specAcceptTotal := 0
@@ -810,29 +814,34 @@ func (e *TorchEngine) generateFromTokensLocked(ctx context.Context, prompt strin
 		}
 
 		// Phase 3: Only check stop sequences when they exist.
-		// When checking, only examine the tail of the output (max stop length)
+		// Tail-only check: examine only the last maxStopLen bytes of output
 		// instead of copying the entire buffer every token.
 		if hasStopSequences {
-			currentText := result.String()
-			for _, stop := range params.Stop {
-				if strings.HasSuffix(currentText, stop) {
-					// Remove the stop sequence from output.
-					result.Reset()
-					result.WriteString(currentText[:len(currentText)-len(stop)])
-					return result.String(), nil
+			bufLen := result.Len()
+			if bufLen >= maxStopLen {
+				// Only copy the tail for comparison, not the full buffer.
+				fullText := result.String()
+				tail := fullText[bufLen-maxStopLen:]
+				for _, stop := range params.Stop {
+					if strings.HasSuffix(tail, stop) {
+						// Remove the stop sequence from output.
+						result.Reset()
+						result.WriteString(fullText[:bufLen-len(stop)])
+						return result.String(), nil
+					}
 				}
 			}
 		}
 
 		// Prepare next batch with the sampled token and issue decode.
-		// Decode returns immediately on CUDA - GPU works asynchronously
+		// Reuse pre-allocated singleToken slice to avoid per-token allocation.
+		// Decode returns immediately on CUDA/Vulkan - GPU works asynchronously
 		// while we loop back to do CPU work (cancel check, etc).
-		decodeStart := time.Now()
-		batch = llama.BatchGetOne([]llama.Token{token})
+		singleToken[0] = token
+		batch = llama.BatchGetOne(singleToken)
 		if _, err := llama.Decode(e.ctx, batch); err != nil {
 			return result.String(), fmt.Errorf("decode token %d: %w", i, err)
 		}
-		LogTrace("Decode block took %v", time.Since(decodeStart))
 	}
 
 	genDuration := time.Since(genStart)
