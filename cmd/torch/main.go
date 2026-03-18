@@ -71,10 +71,10 @@ func main() {
 
 func printBanner() {
 	fmt.Println("")
-	fmt.Println("\033[1;36m  ========================================\033[0m")
-	fmt.Println("\033[1;36m       iTaK Torch - Local LLM Engine\033[0m")
-	fmt.Println("\033[0;36m   Intelligent Task Automation Kernel\033[0m")
-	fmt.Println("\033[1;36m  ========================================\033[0m")
+	fmt.Println("\033[38;5;202m  ========================================\033[0m")
+	fmt.Println("\033[1;36m       iTaK \033[1;38;5;202mTorch\033[0m\033[1;36m - Local LLM Engine\033[0m")
+	fmt.Println("\033[2;36m     Intelligent Task Automation Kernel\033[0m")
+	fmt.Println("\033[38;5;202m  ========================================\033[0m")
 	fmt.Println("")
 }
 
