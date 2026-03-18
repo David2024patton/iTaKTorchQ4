@@ -73,6 +73,7 @@ func printBanner() {
 	fmt.Println("")
 	fmt.Println("\033[1;36m  ========================================\033[0m")
 	fmt.Println("\033[1;36m       iTaK Torch - Local LLM Engine\033[0m")
+	fmt.Println("\033[0;36m   Intelligent Task Automation Kernel\033[0m")
 	fmt.Println("\033[1;36m  ========================================\033[0m")
 	fmt.Println("")
 }
