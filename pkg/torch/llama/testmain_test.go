@@ -54,6 +54,10 @@ func benchmarkSetupOnce(b *testing.B) {
 
 	if nGpuLayers >= 0 {
 		mparams.NGpuLayers = int32(nGpuLayers)
+	} else {
+		// Auto-offload: load all layers to GPU when available.
+		// Without this, CUDA/Vulkan backends get 0 GPU layers = CPU only.
+		mparams.NGpuLayers = 999
 	}
 
 	if device != "" {
@@ -77,8 +81,15 @@ func benchmarkSetupOnce(b *testing.B) {
 	benchModel = model
 
 	params := ContextDefaultParams()
-	params.NBatch = 1024
+	params.NBatch = 4096
 	params.NCtx = uint32(nCtx)
+
+	// Enable flash attention for GPU (20-30% faster attention computation).
+	params.FlashAttentionType = FlashAttentionTypeEnabled
+
+	// Quantize KV cache to q8_0 (halves VRAM usage with minimal quality loss).
+	params.TypeK = GGMLTypeQ8_0
+	params.TypeV = GGMLTypeQ8_0
 
 	if nThreads > 0 {
 		params.NThreads = int32(nThreads)

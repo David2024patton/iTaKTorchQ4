@@ -99,11 +99,34 @@ func NewTorchEngine(modelPath string, opts EngineOpts) (*TorchEngine, error) {
 	// --- Auto-Configuration: detect hardware and select optimal backend ---
 	// Probes GPUs, estimates VRAM needs from model size, picks backend/layers/threads.
 	// User overrides (env var, explicit Backend, explicit GPULayers) always win.
+
+	// If ITAK_TORCH_LIB is set, infer the backend from the path name.
+	// This prevents the situation where setting ITAK_TORCH_LIB=.../cuda/
+	// still auto-selects Vulkan - the lib path IS the user's backend choice.
+	envLib := os.Getenv("ITAK_TORCH_LIB")
+	if envLib != "" && opts.Backend == "" {
+		pathLower := strings.ToLower(envLib)
+		switch {
+		case strings.Contains(pathLower, "cuda"):
+			opts.Backend = "cuda"
+			fmt.Println("[iTaK Torch] Backend inferred from ITAK_TORCH_LIB: cuda")
+		case strings.Contains(pathLower, "vulkan"):
+			opts.Backend = "vulkan"
+			fmt.Println("[iTaK Torch] Backend inferred from ITAK_TORCH_LIB: vulkan")
+		case strings.Contains(pathLower, "metal"):
+			opts.Backend = "metal"
+			fmt.Println("[iTaK Torch] Backend inferred from ITAK_TORCH_LIB: metal")
+		}
+	}
+
 	ac := ApplyAutoConfig(&opts, modelPath)
 	fmt.Printf("[iTaK Torch] AutoConfig: %s\n", ac)
 
+	// --- Startup Diagnostics ---
+	diag := NewDiagReport(DiagLevelFromEnv())
+
 	// Find the llama.cpp shared libraries.
-	libPath := os.Getenv("ITAK_TORCH_LIB")
+	libPath := envLib
 	if libPath == "" {
 		// Use AutoConfig recommendation with graceful fallback.
 		libPath = RecommendLibPath(ac)
@@ -122,6 +145,12 @@ func NewTorchEngine(modelPath string, opts EngineOpts) (*TorchEngine, error) {
 	}
 	fmt.Printf("[iTaK Torch] Using libs from: %s\n", libPath)
 
+	// Run diagnostics (DLL scan, backend check, GPU verification, perf settings).
+	diag.RunDLLDiagnostics(libPath)
+	diag.RunBackendDiagnostics(ac, &opts)
+	diag.RunGPUVerification()
+	diag.RunPerfDiagnostics(&opts)
+	diag.Print()
 
 	if libPath == "" {
 		return nil, fmt.Errorf("llama.cpp libraries not found. Set ITAK_TORCH_LIB env variable or run 'itaktorch install'")
