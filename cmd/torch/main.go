@@ -71,11 +71,11 @@ func main() {
 
 func printBanner() {
 	fmt.Println("\033[36m" + `
-   ___  _____         ____ __    _______                 __  
-  / _/ /__  /  ____ _/ //_// /  /_  __/ ___   ____ _____/ /__
-  / /    / /  / __ \/ ,<  / /    / /   / _ \ / __// ___/ //_/
- / /    / /  / /_/ / /| |/_/    / /   / (_) / /  / /__/ / \  
-/___/  /_/   \__,_/_/ |_|      /_/    \___//_/   \___/_/ |_| 
++------------------------------------------------------+
+|   i T a K   |   T O R C H                            |
+|-------------+----------------------------------------|
+| High-Performance Local Edge Infrastructure           |
++------------------------------------------------------+
 ` + "\033[0m")
 }
 
@@ -381,14 +381,31 @@ func cmdModels() {
 
 	printBanner()
 	fmt.Printf("\033[1mCached models\033[0m (%s):\n\n", mgr.CacheDir())
-	fmt.Printf("  \033[36m%-40s  %-10s  %-12s\033[0m\n", "NAME", "SIZE", "LAST USED")
-	fmt.Printf("  \033[36m%-40s  %-10s  %-12s\033[0m\n", strings.Repeat("-", 40), strings.Repeat("-", 10), strings.Repeat("-", 12))
+
+	maxLen := 40
+	for _, m := range models {
+		if len(m.Name) > maxLen && len(m.Name) <= 55 {
+			maxLen = len(m.Name)
+		} else if len(m.Name) > 55 {
+			maxLen = 55
+		}
+	}
+
+	fmt.Printf("  \033[36m%-*s  %-10s  %-12s\033[0m\n", maxLen, "NAME", "SIZE", "LAST USED")
+	fmt.Printf("  \033[36m%-*s  %-10s  %-12s\033[0m\n", maxLen, strings.Repeat("-", maxLen), strings.Repeat("-", 10), strings.Repeat("-", 12))
+	
 	for _, m := range models {
 		sizeMB := m.Size / 1024 / 1024
+		
+		name := m.Name
+		if len(name) > maxLen {
+			name = name[:maxLen-3] + "..."
+		}
+
 		if strings.HasSuffix(m.Name, " (HF)") {
-			fmt.Printf("  \033[33m%-40s  %6d MB  %s\033[0m\n", m.Name, sizeMB, m.LastUsed.Format("2006-01-02"))
+			fmt.Printf("  \033[33m%-*s  %6d MB  %s\033[0m\n", maxLen, name, sizeMB, m.LastUsed.Format("2006-01-02"))
 		} else {
-			fmt.Printf("  %-40s  %6d MB  %s\n", m.Name, sizeMB, m.LastUsed.Format("2006-01-02"))
+			fmt.Printf("  %-*s  %6d MB  %s\n", maxLen, name, sizeMB, m.LastUsed.Format("2006-01-02"))
 		}
 	}
 	fmt.Println()
