@@ -9,7 +9,7 @@ FROM ubuntu:24.04
 
 # Vulkan ICD + NVIDIA driver support
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates wget libvulkan1 mesa-vulkan-drivers \
+    ca-certificates wget libvulkan1 mesa-vulkan-drivers libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 # NVIDIA GPU support (NVIDIA Container Toolkit)
@@ -20,6 +20,14 @@ ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
 COPY itaktorch_linux_amd64 /usr/local/bin/itaktorch
 RUN chmod +x /usr/local/bin/itaktorch
 COPY lib/linux_amd64/ /app/lib/linux_amd64/
+
+# Create .so.0 versioned symlinks that the dynamic linker expects
+RUN cd /app/lib/linux_amd64 && \
+    ln -sf libllama.so libllama.so.0 && \
+    ln -sf libggml.so libggml.so.0 && \
+    ln -sf libggml-base.so libggml-base.so.0 && \
+    echo "/app/lib/linux_amd64" > /etc/ld.so.conf.d/itaktorch.conf && \
+    ldconfig
 
 # Set lib path for llama.cpp backend
 ENV ITAK_TORCH_LIB=/app/lib/linux_amd64
