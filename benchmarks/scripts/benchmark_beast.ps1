@@ -351,6 +351,12 @@ function Run-EngineMatrix {
     # --- Ollama (GPU, default) ---
     Write-Host "`n--- Ollama GPU ($OllamaModel) x$Iterations ---" -ForegroundColor Yellow
 
+    # Warmup: ensure model is loaded in GPU memory before measuring.
+    # Without this, the first iteration is a cold start (7x slower).
+    Write-Host "  Warming up Ollama (loading model to GPU)..." -ForegroundColor DarkGray
+    $warmup = Run-OllamaInference -OModel $OllamaModel -Prompt "hi" -MaxTokens 1
+    Write-Host "  Warmup done ($($warmup.TokPerSec) tok/s)" -ForegroundColor DarkGray
+
     $gpuBefore = Get-GpuSnapshot
     $ramBefore = Get-SystemRamGB
 
