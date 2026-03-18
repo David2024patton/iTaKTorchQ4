@@ -228,7 +228,7 @@ func (r *ModelRegistry) resolveModel(name string) (string, error) {
 	return "", fmt.Errorf("model %q not found in %s (directory is empty)", name, r.modelsDir)
 }
 
-// ListAvailable returns all .gguf files in the models directory.
+// ListAvailable returns all .gguf files in the models directory with file sizes.
 func (r *ModelRegistry) ListAvailable() []ModelInfo {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -244,10 +244,15 @@ func (r *ModelRegistry) ListAvailable() []ModelInfo {
 			continue
 		}
 		name := strings.TrimSuffix(entry.Name(), ".gguf")
+		var sizeBytes int64
+		if info, err := entry.Info(); err == nil {
+			sizeBytes = info.Size()
+		}
 		models = append(models, ModelInfo{
-			ID:      name,
-			Object:  "model",
-			OwnedBy: "itaktorch",
+			ID:        name,
+			Object:    "model",
+			OwnedBy:   "itaktorch",
+			SizeBytes: sizeBytes,
 		})
 	}
 	return models

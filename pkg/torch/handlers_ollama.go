@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -98,8 +99,10 @@ type OllamaChatResponse struct {
 }
 
 // OllamaModelInfo matches Ollama's model info response.
+// Both "name" and "model" are required - Open WebUI uses "model" for selection.
 type OllamaModelInfo struct {
 	Name       string            `json:"name"`
+	Model      string            `json:"model"`
 	ModifiedAt time.Time         `json:"modified_at"`
 	Size       int64             `json:"size"`
 	Digest     string            `json:"digest"`
@@ -108,11 +111,12 @@ type OllamaModelInfo struct {
 
 // OllamaModelDetail holds model detail metadata.
 type OllamaModelDetail struct {
+	ParentModel       string   `json:"parent_model"`
 	Format            string   `json:"format"`
 	Family            string   `json:"family"`
+	Families          []string `json:"families"`
 	ParameterSize     string   `json:"parameter_size"`
 	QuantizationLevel string   `json:"quantization_level"`
-	Families          []string `json:"families,omitempty"`
 }
 
 // --- Handlers ---
@@ -275,6 +279,8 @@ func (s *Server) handleOllamaChat(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleOllamaTags handles GET /api/tags (list available models).
+// Lists ALL available models from the models directory, not just loaded ones.
+// This matches Ollama's behavior where /api/tags shows all pulled models.
 func (s *Server) handleOllamaTags(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
@@ -283,30 +289,36 @@ func (s *Server) handleOllamaTags(w http.ResponseWriter, r *http.Request) {
 
 	models := make([]OllamaModelInfo, 0)
 
-	// Add the primary loaded model.
-	if s.engine != nil {
-		info := OllamaModelInfo{
-			Name:       s.engine.ModelName(),
-			ModifiedAt: time.Now(),
-			Details: OllamaModelDetail{
-				Format: "gguf",
-				Family: "llama",
-			},
-		}
-		models = append(models, info)
-	}
-
-	// Add models from registry if multi-model mode is active.
+	// Multi-model mode: list ALL available .gguf files from the models directory.
+	// Open WebUI expects to see all models on startup, not just loaded ones.
 	if s.registry != nil {
-		for _, name := range s.registry.LoadedModels() {
+		for _, mi := range s.registry.ListAvailable() {
+			ollamaName := mi.ID
 			models = append(models, OllamaModelInfo{
-				Name:       name,
+				Name:       ollamaName,
+				Model:      ollamaName,
 				ModifiedAt: time.Now(),
+			Size:       mi.SizeBytes,
 				Details: OllamaModelDetail{
-					Format: "gguf",
+					Format:   "gguf",
+					Family:   inferFamily(ollamaName),
+					Families: []string{inferFamily(ollamaName)},
 				},
 			})
 		}
+	} else if s.engine != nil {
+		// Single-model mode: list the loaded model.
+		name := s.engine.ModelName()
+		models = append(models, OllamaModelInfo{
+			Name:       name,
+			Model:      name,
+			ModifiedAt: time.Now(),
+			Details: OllamaModelDetail{
+				Format:   "gguf",
+				Family:   inferFamily(name),
+				Families: []string{inferFamily(name)},
+			},
+		})
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -523,6 +535,38 @@ func (s *Server) ollamaModelName(requested string) string {
 		return s.engine.ModelName()
 	}
 	return "unknown"
+}
+
+// inferFamily guesses the Ollama-style family name from a GGUF model filename.
+// Examples: "qwen2.5-0.5b-instruct-q4_k_m" -> "qwen2", "qwen3-8b" -> "qwen3".
+func inferFamily(name string) string {
+	n := strings.ToLower(name)
+	switch {
+	case strings.Contains(n, "qwen3-vl"), strings.Contains(n, "qwen3vl"):
+		return "qwen3vl"
+	case strings.Contains(n, "qwen3"):
+		return "qwen3"
+	case strings.Contains(n, "qwen2"):
+		return "qwen2"
+	case strings.Contains(n, "gemma3"):
+		return "gemma3"
+	case strings.Contains(n, "gemma"):
+		return "gemma"
+	case strings.Contains(n, "mistral"), strings.Contains(n, "ministral"):
+		return "mistral3"
+	case strings.Contains(n, "deepseek"):
+		return "deepseek"
+	case strings.Contains(n, "phi"):
+		return "phi"
+	case strings.Contains(n, "granite"):
+		return "granite"
+	case strings.Contains(n, "nemotron"):
+		return "nemotron"
+	case strings.Contains(n, "openclaw"), strings.Contains(n, "gpt"):
+		return "gptoss"
+	default:
+		return "llama"
+	}
 }
 
 // RegisterOllamaRoutes registers all Ollama-compatible routes on the mux.

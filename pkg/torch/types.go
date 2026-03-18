@@ -225,9 +225,10 @@ type ModelsResponse struct {
 
 // ModelInfo describes a single model available on this server.
 type ModelInfo struct {
-	ID      string `json:"id"`
-	Object  string `json:"object"`
-	OwnedBy string `json:"owned_by"`
+	ID        string `json:"id"`
+	Object    string `json:"object"`
+	OwnedBy   string `json:"owned_by"`
+	SizeBytes int64  `json:"size_bytes,omitempty"`
 }
 
 // HealthResponse is the response body for GET /health.
