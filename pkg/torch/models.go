@@ -111,21 +111,50 @@ func (m *ModelManager) List() ([]ModelEntry, error) {
 		if err != nil {
 			return
 		}
+
+		hasSafetensors := false
+		var dirSize int64
+		var lastUsed time.Time
+
 		for _, entry := range ents {
-			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".gguf") {
+			if entry.IsDir() {
 				continue
 			}
-			info, err := entry.Info()
-			if err != nil {
-				continue
+
+			if strings.HasSuffix(entry.Name(), ".gguf") {
+				info, err := entry.Info()
+				if err != nil {
+					continue
+				}
+				name := strings.TrimSuffix(entry.Name(), ".gguf")
+				if _, exists := modelMap[name]; !exists {
+					modelMap[name] = ModelEntry{
+						Name:     name,
+						Path:     filepath.Join(dir, entry.Name()),
+						Size:     info.Size(),
+						LastUsed: info.ModTime(),
+					}
+				}
+			} else if strings.HasSuffix(entry.Name(), ".safetensors") {
+				hasSafetensors = true
+				if info, err := entry.Info(); err == nil {
+					dirSize += info.Size()
+					if info.ModTime().After(lastUsed) {
+						lastUsed = info.ModTime()
+					}
+				}
 			}
-			name := strings.TrimSuffix(entry.Name(), ".gguf")
+		}
+
+		// If this directory had safetensors, register the directory itself as an HF model.
+		if hasSafetensors {
+			name := filepath.Base(dir) + " (HF)"
 			if _, exists := modelMap[name]; !exists {
 				modelMap[name] = ModelEntry{
 					Name:     name,
-					Path:     filepath.Join(dir, entry.Name()),
-					Size:     info.Size(),
-					LastUsed: info.ModTime(),
+					Path:     dir, // path goes to the directory itself
+					Size:     dirSize,
+					LastUsed: lastUsed,
 				}
 			}
 		}
@@ -153,19 +182,28 @@ func (m *ModelManager) List() ([]ModelEntry, error) {
 	return models, nil
 }
 
-// GetPath returns the full path to a cached model by name.
+// GetPath returns the full path to a cached model (or HF directory) by name.
 func (m *ModelManager) GetPath(name string) (string, error) {
-	if !strings.HasSuffix(name, ".gguf") {
+	// 1. Search exactly what List() sees. This solves exact matching for "ModelName (HF)"
+	models, err := m.List()
+	if err == nil {
+		for _, mod := range models {
+			if mod.Name == name || mod.Name == strings.TrimSuffix(name, ".gguf") {
+				return mod.Path, nil
+			}
+		}
+	}
+
+	// 2. Fallback for backwards compatibility
+	if !strings.HasSuffix(name, ".gguf") && !strings.HasSuffix(name, " (HF)") {
 		name = name + ".gguf"
 	}
 
-	// 1. Check default cache dir
 	path := filepath.Join(m.cacheDir, name)
 	if _, err := os.Stat(path); err == nil {
 		return path, nil
 	}
 
-	// 2. Check all watched directories
 	if cfg, err := LoadConfig(); err == nil {
 		for _, wd := range cfg.WatchedDirs {
 			p := filepath.Join(wd, name)

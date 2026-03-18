@@ -42,6 +42,8 @@ func main() {
 		cmdRecommend()
 	case "scan", "s":
 		cmdScan(os.Args[2:])
+	case "convert", "c":
+		cmdConvert(os.Args[2:])
 	case "clean":
 		cmdClean()
 	case "rm", "delete":
@@ -89,6 +91,7 @@ Commands:
   serve       Load a GGUF model and start the inference server
   models      List cached models (alias: list, ls)
   scan        Search your hard drives for .gguf files and track their folders
+  convert     Manually convert a discovered HuggingFace Safetensors model to .gguf
   clean       Clear all watched directories to empty the scan list
   rm          Permanently delete a tracked model from your hard drive (alias: delete)
   nuke        DANGER: Permanently delete ALL tracked models from your hard drive
@@ -1393,4 +1396,38 @@ func cmdNuke() {
 		}
 	}
 	fmt.Printf("\n\033[32mSuccessfully deleted %d models.\033[0m\n", deleted)
+}
+
+func cmdConvert(args []string) {
+	if len(args) == 0 {
+		fmt.Fprintf(os.Stderr, "Usage: torch convert <model_name>\n")
+		fmt.Fprintf(os.Stderr, "Example: torch convert \"Qwen (HF)\"\n")
+		os.Exit(1)
+	}
+
+	modelName := args[0]
+	mgr, err := torch.NewModelManager(defaultCacheDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to initialize model manager: %v\n", err)
+		os.Exit(1)
+	}
+
+	path, err := mgr.GetPath(modelName)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Model not found: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("[iTaK Torch] Starting manual conversion for: %s\n", modelName)
+	fmt.Printf("[iTaK Torch] Target directory: %s\n", path)
+	
+	convertedPath, convErr := torch.AutoConvert(path, defaultCacheDir)
+	if convErr != nil {
+		fmt.Fprintf(os.Stderr, "Error during conversion: %v\n", convErr)
+		os.Exit(1)
+	}
+
+	fmt.Printf("\n\033[32mSuccessfully converted model to GGUF format!\033[0m\n")
+	fmt.Printf("File saved to: %s\n", convertedPath)
+	fmt.Printf("You can now run: torch serve \"%s\"\n", filepath.Base(convertedPath))
 }
