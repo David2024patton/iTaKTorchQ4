@@ -71,12 +71,11 @@ func main() {
 
 func printBanner() {
 	fmt.Println("\033[36m" + `
-  _  _____       _  __   _____               _     
- (_)|_   _|     | |/ /  |_   _|             | |    
-  _   | |  __ _ | ' /     | |   ___  _ __ __| |__  
- | |  | | / _` + "`" + ` ||  <      | |  / _ \| '__/ __| '_ \ 
- | |  | || (_| || . \     | | | (_) | | | (__| | | |
- |_|  \_/ \__,_||_|\_\    \_/  \___/|_|  \___|_| |_|
+   ___  _____         ____ __    _______                 __  
+  / _/ /__  /  ____ _/ //_// /  /_  __/ ___   ____ _____/ /__
+  / /    / /  / __ \/ ,<  / /    / /   / _ \ / __// ___/ //_/
+ / /    / /  / /_/ / /| |/_/    / /   / (_) / /  / /__/ / \  
+/___/  /_/   \__,_/_/ |_|      /_/    \___//_/   \___/_/ |_| 
 ` + "\033[0m")
 }
 
@@ -386,7 +385,11 @@ func cmdModels() {
 	fmt.Printf("  \033[36m%-40s  %-10s  %-12s\033[0m\n", strings.Repeat("-", 40), strings.Repeat("-", 10), strings.Repeat("-", 12))
 	for _, m := range models {
 		sizeMB := m.Size / 1024 / 1024
-		fmt.Printf("  %-40s  %6d MB  %s\n", m.Name, sizeMB, m.LastUsed.Format("2006-01-02"))
+		if strings.HasSuffix(m.Name, " (HF)") {
+			fmt.Printf("  \033[33m%-40s  %6d MB  %s\033[0m\n", m.Name, sizeMB, m.LastUsed.Format("2006-01-02"))
+		} else {
+			fmt.Printf("  %-40s  %6d MB  %s\n", m.Name, sizeMB, m.LastUsed.Format("2006-01-02"))
+		}
 	}
 	fmt.Println()
 }
