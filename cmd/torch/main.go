@@ -42,6 +42,12 @@ func main() {
 		cmdRecommend()
 	case "scan", "s":
 		cmdScan(os.Args[2:])
+	case "clean":
+		cmdClean()
+	case "rm", "delete":
+		cmdRemove(os.Args[2:])
+	case "nuke", "delete-all":
+		cmdNuke()
 	case "pull":
 		cmdPull(os.Args[2:])
 	case "ollama-pull", "opull":
@@ -83,6 +89,9 @@ Commands:
   serve       Load a GGUF model and start the inference server
   models      List cached models (alias: list, ls)
   scan        Search your hard drives for .gguf files and track their folders
+  clean       Clear all watched directories to empty the scan list
+  rm          Permanently delete a tracked model from your hard drive (alias: delete)
+  nuke        DANGER: Permanently delete ALL tracked models from your hard drive
   catalog     Show all available models with family and hardware info
   recommend   Detect your hardware and recommend compatible models
   pull        Download a model from the curated catalog by name
@@ -1251,16 +1260,21 @@ func cmdScan(args []string) {
 				fmt.Printf("\r\033[K[\033[36m...\033[0m] Scanning files... [ %s ]", d.Name())
 			}
 
-			if !d.IsDir() && strings.HasSuffix(strings.ToLower(d.Name()), ".gguf") {
-				dir := filepath.Dir(path)
-				if !foundDirs[dir] {
-					foundDirs[dir] = true
+			nameLower := strings.ToLower(d.Name())
+		if !d.IsDir() && (strings.HasSuffix(nameLower, ".gguf") || strings.HasSuffix(nameLower, ".safetensors")) {
+			dir := filepath.Dir(path)
+			if !foundDirs[dir] {
+				foundDirs[dir] = true
+				if strings.HasSuffix(nameLower, ".safetensors") {
+					fmt.Printf("\r\033[K[\033[33mHF Safetensors\033[0m] Found model directory: %s\n", dir)
+				} else {
 					fmt.Printf("\r\033[K[\033[32miTaK Torch\033[0m] Found model directory: %s\n", dir)
 				}
-				modelCount++
 			}
-			return nil
-		})
+			modelCount++
+		}
+		return nil
+	})
 
 		// Clear the status line
 		fmt.Print("\r\033[K")
@@ -1288,4 +1302,95 @@ func cmdScan(args []string) {
 
 	fmt.Printf("[iTaK Torch] Added %d new directories to your watched list.\n", newDirs)
 	fmt.Println("You can now run 'torch list' to see all your discovered models.")
+}
+
+// ---------- disk management ----------
+
+func cmdClean() {
+	if err := torch.ClearWatchedDirs(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error clearing watched directories: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println("\033[32mSuccessfully cleared all watched directories.\033[0m")
+	fmt.Println("Your 'torch list' is now reset to your default cache.")
+}
+
+func cmdRemove(args []string) {
+	if len(args) == 0 {
+		fmt.Fprintf(os.Stderr, "Usage: torch rm <model_name>\n")
+		os.Exit(1)
+	}
+
+	modelName := args[0]
+	mgr, err := torch.NewModelManager(defaultCacheDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to initialize model manager: %v\n", err)
+		os.Exit(1)
+	}
+
+	path, err := mgr.GetPath(modelName)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Model not found: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("\033[31mWARNING: This will permanently delete the file at:\033[0m\n  %s\n", path)
+	fmt.Print("Are you sure you want to delete this model? [y/N]: ")
+	reader := bufio.NewReader(os.Stdin)
+	ans, _ := reader.ReadString('\n')
+	ans = strings.TrimSpace(strings.ToLower(ans))
+	if ans != "y" && ans != "yes" {
+		fmt.Println("Aborted.")
+		return
+	}
+
+	if err := mgr.Remove(modelName); err != nil {
+		fmt.Fprintf(os.Stderr, "Error deleting model: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("\033[32mSuccessfully deleted %s\033[0m\n", modelName)
+}
+
+func cmdNuke() {
+	mgr, err := torch.NewModelManager(defaultCacheDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to initialize model manager: %v\n", err)
+		os.Exit(1)
+	}
+
+	models, err := mgr.List()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error gathering models: %v\n", err)
+		os.Exit(1)
+	}
+
+	if len(models) == 0 {
+		fmt.Println("No models tracked. Nothing to delete.")
+		return
+	}
+
+	fmt.Printf("\033[31;1mCRITICAL WARNING: You are about to permanently delete %d models from your hard drive.\033[0m\n", len(models))
+	fmt.Println("This includes ALL models found across ALL scanned directories and your default cache.")
+	fmt.Println("This action CANNOT BE UNDONE.")
+	fmt.Print("Type 'NUKE' to confirm deletion of all models: ")
+	
+	reader := bufio.NewReader(os.Stdin)
+	ans, _ := reader.ReadString('\n')
+	if strings.TrimSpace(ans) != "NUKE" {
+		fmt.Println("Aborted.")
+		return
+	}
+
+	deleted := 0
+	for _, m := range models {
+		fmt.Printf("Deleting %s... ", m.Path)
+		if err := os.Remove(m.Path); err != nil {
+			fmt.Printf("Error: %v\n", err)
+		} else {
+			fmt.Println("Done.")
+			deleted++
+		}
+	}
+	fmt.Printf("\n\033[32mSuccessfully deleted %d models.\033[0m\n", deleted)
 }

@@ -180,13 +180,13 @@ func (m *ModelManager) GetPath(name string) (string, error) {
 
 // Remove deletes a cached model by name.
 func (m *ModelManager) Remove(name string) error {
-	if !strings.HasSuffix(name, ".gguf") {
-		name = name + ".gguf"
+	path, err := m.GetPath(name)
+	if err != nil {
+		return fmt.Errorf("model %q not found: %w", name, err)
 	}
 
-	path := filepath.Join(m.cacheDir, name)
 	if err := os.Remove(path); err != nil {
-		return fmt.Errorf("remove model %q: %w", name, err)
+		return fmt.Errorf("failed to delete file %q: %w", path, err)
 	}
 	return nil
 }

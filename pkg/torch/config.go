@@ -93,3 +93,13 @@ func AddWatchedDir(dir string) error {
 	cfg.WatchedDirs = append(cfg.WatchedDirs, absDir)
 	return SaveConfig(cfg)
 }
+
+// ClearWatchedDirs wipes the configuration of tracked directories back to empty
+func ClearWatchedDirs() error {
+	cfg, err := LoadConfig()
+	if err != nil {
+		return err
+	}
+	cfg.WatchedDirs = []string{}
+	return SaveConfig(cfg)
+}
