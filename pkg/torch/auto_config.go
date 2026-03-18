@@ -18,6 +18,7 @@ package torch
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 )
@@ -194,7 +195,72 @@ func ApplyAutoConfig(opts *EngineOpts, modelPath string) AutoConfig {
 		opts.BatchSize = TuneBatchSize(modelMB, ac.ModelFitsGPU, gpuInv.BestVRAMMiB, opts.ContextSize)
 	}
 
+	// Auto-enable prefix caching for system prompt reuse.
+	// Caches KV state after processing system prompt so subsequent requests
+	// with the same system prompt skip re-evaluation (15-25% faster).
+	if opts.PrefixCacheSize == 0 {
+		opts.PrefixCacheSize = 16
+		fmt.Println("[iTaK Torch] Auto-enabled: Prefix cache (16 entries, reuses system prompt KV state)")
+	}
+
+	// Auto-detect draft model for speculative decoding.
+	// Looks for small models (< 2GB) in the same directory as the main model.
+	// Only activates if user didn't explicitly set a draft model.
+	if opts.DraftModelPath == "" && modelPath != "" {
+		dir := filepath.Dir(modelPath)
+		draftPath := findDraftModel(dir, modelPath)
+		if draftPath != "" {
+			opts.DraftModelPath = draftPath
+			if opts.SpeculativeTokens <= 0 {
+				opts.SpeculativeTokens = 5
+			}
+			fmt.Printf("[iTaK Torch] Auto-detected draft model: %s (speculative decoding with %d tokens)\n",
+				filepath.Base(draftPath), opts.SpeculativeTokens)
+		}
+	}
+
 	return ac
+}
+
+// findDraftModel scans the models directory for a small GGUF file (<2GB)
+// suitable as a draft model for speculative decoding. Returns empty string
+// if no suitable draft model is found.
+func findDraftModel(dir string, mainModelPath string) string {
+	const maxDraftSize int64 = 2 * 1024 * 1024 * 1024 // 2GB
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+
+	mainBase := filepath.Base(mainModelPath)
+	var bestPath string
+	var bestSize int64
+
+	for _, entry := range entries {
+		name := entry.Name()
+		// Skip the main model itself.
+		if name == mainBase {
+			continue
+		}
+		// Only consider GGUF files.
+		if !strings.HasSuffix(strings.ToLower(name), ".gguf") {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		// Draft model must be small and smaller than any previously found.
+		if info.Size() > 0 && info.Size() < maxDraftSize {
+			if bestPath == "" || info.Size() < bestSize {
+				bestPath = filepath.Join(dir, name)
+				bestSize = info.Size()
+			}
+		}
+	}
+
+	return bestPath
 }
 
 // RecommendLibPath returns the best library directory path based on AutoConfig.
