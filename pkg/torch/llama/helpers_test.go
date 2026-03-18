@@ -81,6 +81,9 @@ func benchmarkSetup(b *testing.B) {
 
 	LogSet(LogSilent())
 
+	// BackendLoadAll activates GPU backends (CUDA, Vulkan, Metal).
+	// Without this, CUDA never initializes and inference runs on CPU only.
+	BackendLoadAll()
 	Init()
 }
 
