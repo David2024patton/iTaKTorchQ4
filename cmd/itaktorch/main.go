@@ -34,7 +34,7 @@ func main() {
 	switch os.Args[1] {
 	case "serve":
 		cmdServe(os.Args[2:])
-	case "models":
+	case "models", "list", "ls":
 		cmdModels()
 	case "catalog":
 		cmdCatalog()
@@ -67,7 +67,7 @@ Usage:
 
 Commands:
   serve       Load a GGUF model and start the inference server
-  models      List cached models
+  models      List cached models (alias: list, ls)
   catalog     Show all available models with family and hardware info
   recommend   Detect your hardware and recommend compatible models
   pull        Download a model from the curated catalog by name
@@ -81,8 +81,8 @@ Examples:
   itaktorch serve --model ./model.gguf --ollama-api=false  (disable Ollama compat)
   itaktorch ollama-pull nemotron-3-nano:30b-a3b-q4_K_M
   itaktorch recommend
-  itaktorch catalog
-  itaktorch pull qwen3-0.6b-q4_k_m`)
+  itaktorch pull qwen3-0.6b-q4_k_m
+  itaktorch list`)
 }
 
 func cmdServe(args []string) {
