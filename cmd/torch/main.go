@@ -1190,39 +1190,58 @@ func cmdChat(args []string) {
 
 // ---------- scan ----------
 
-func cmdScan(args []string) {
-	if len(args) == 0 {
-		fmt.Fprintf(os.Stderr, "Usage: torch scan <directory>\n")
-		fmt.Fprintf(os.Stderr, "Example: torch scan C:\\\n")
-		os.Exit(1)
+func getDrives() []string {
+	var drives []string
+	if runtime.GOOS == "windows" {
+		for _, drive := range "ABCDEFGHIJKLMNOPQRSTUVWXYZ" {
+			path := string(drive) + ":\\"
+			if _, err := os.Stat(path); err == nil {
+				drives = append(drives, path)
+			}
+		}
+	} else {
+		drives = append(drives, "/")
 	}
+	return drives
+}
 
-	startDir := args[0]
-	fmt.Printf("[iTaK Torch] Scanning for .gguf files starting from: %s\n", startDir)
+func cmdScan(args []string) {
+	var targets []string
+	if len(args) == 0 {
+		targets = getDrives()
+		fmt.Printf("[iTaK Torch] No path provided. Auto-detecting drives to scan: %v\n", targets)
+		fmt.Println("[iTaK Torch] This full-system scan may take a few minutes...")
+	} else {
+		targets = []string{args[0]}
+	}
 
 	foundDirs := make(map[string]bool)
 	modelCount := 0
 
-	err := filepath.WalkDir(startDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			if d != nil && d.IsDir() {
-				return filepath.SkipDir
+	for _, startDir := range targets {
+		fmt.Printf("[iTaK Torch] Scanning for .gguf files in: %s\n", startDir)
+		
+		err := filepath.WalkDir(startDir, func(path string, d os.DirEntry, err error) error {
+			if err != nil {
+				if d != nil && d.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if !d.IsDir() && strings.HasSuffix(strings.ToLower(d.Name()), ".gguf") {
+				dir := filepath.Dir(path)
+				if !foundDirs[dir] {
+					foundDirs[dir] = true
+					fmt.Printf("[iTaK Torch] Found model directory: %s\n", dir)
+				}
+				modelCount++
 			}
 			return nil
-		}
-		if !d.IsDir() && strings.HasSuffix(strings.ToLower(d.Name()), ".gguf") {
-			dir := filepath.Dir(path)
-			if !foundDirs[dir] {
-				foundDirs[dir] = true
-				fmt.Printf("[iTaK Torch] Found model directory: %s\n", dir)
-			}
-			modelCount++
-		}
-		return nil
-	})
+		})
 
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error scanning: %v\n", err)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error scanning %s: %v\n", startDir, err)
+		}
 	}
 
 	if len(foundDirs) == 0 {
