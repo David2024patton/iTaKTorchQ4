@@ -70,14 +70,11 @@ func main() {
 }
 
 func printBanner() {
-	fmt.Print("\033[36m")
-	fmt.Println("  ######################################")
-	fmt.Println("  ##                                  ##")
-	fmt.Println("  ##   \033[1;37mi T a K\033[0;36m   \033[1;33mT O R C H\033[0;36m          ##")
-	fmt.Println("  ##   Local LLM Inference Engine     ##")
-	fmt.Println("  ##                                  ##")
-	fmt.Println("  ######################################")
-	fmt.Print("\033[0m\n")
+	fmt.Println("")
+	fmt.Println("\033[1;36m  ========================================\033[0m")
+	fmt.Println("\033[1;36m       iTaK Torch - Local LLM Engine\033[0m")
+	fmt.Println("\033[1;36m  ========================================\033[0m")
+	fmt.Println("")
 }
 
 func printUsage() {
