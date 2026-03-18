@@ -39,7 +39,7 @@ import (
 // OllamaPuller manages downloading models from the Ollama registry.
 //
 // Fields:
-//   - CacheDir: where downloaded models are stored (default ~/.itaktorch/models/)
+//   - CacheDir: where downloaded models are stored (default ~/.torch/models/)
 //   - Progress: optional callback for download progress reporting
 type OllamaPuller struct {
 	CacheDir string                         // local storage directory
@@ -134,7 +134,7 @@ const (
 // NewOllamaPuller creates an Ollama registry client.
 //
 // Parameters:
-//   - cacheDir: where to store downloaded models. If empty, uses ~/.itaktorch/models/
+//   - cacheDir: where to store downloaded models. If empty, uses ~/.torch/models/
 func NewOllamaPuller(cacheDir string) (*OllamaPuller, error) {
 	// Default cache directory.
 	if cacheDir == "" {
@@ -142,7 +142,7 @@ func NewOllamaPuller(cacheDir string) (*OllamaPuller, error) {
 		if err != nil {
 			return nil, fmt.Errorf("get home dir: %w", err)
 		}
-		cacheDir = filepath.Join(home, ".itaktorch", "models")
+		cacheDir = filepath.Join(home, ".torch", "models")
 	}
 
 	// Create cache directory if missing.

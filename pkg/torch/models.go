@@ -21,6 +21,14 @@ type ModelManager struct {
 // NewModelManager creates a model manager with the given cache directory.
 // Creates the directory if it doesn't exist.
 func NewModelManager(cacheDir string) (*ModelManager, error) {
+	if cacheDir == "" {
+		if home, err := os.UserHomeDir(); err == nil {
+			cacheDir = filepath.Join(home, ".torch", "models")
+		} else {
+			cacheDir = "./models"
+		}
+	}
+
 	// Expand ~ to home directory.
 	if strings.HasPrefix(cacheDir, "~") {
 		home, err := os.UserHomeDir()
@@ -96,26 +104,46 @@ func (m *ModelManager) Download(url string, name string) (string, error) {
 
 // List returns all cached models sorted by name.
 func (m *ModelManager) List() ([]ModelEntry, error) {
-	entries, err := os.ReadDir(m.cacheDir)
-	if err != nil {
-		return nil, fmt.Errorf("read cache dir: %w", err)
+	modelMap := make(map[string]ModelEntry)
+
+	scanDir := func(dir string) {
+		ents, err := os.ReadDir(dir)
+		if err != nil {
+			return
+		}
+		for _, entry := range ents {
+			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".gguf") {
+				continue
+			}
+			info, err := entry.Info()
+			if err != nil {
+				continue
+			}
+			name := strings.TrimSuffix(entry.Name(), ".gguf")
+			if _, exists := modelMap[name]; !exists {
+				modelMap[name] = ModelEntry{
+					Name:     name,
+					Path:     filepath.Join(dir, entry.Name()),
+					Size:     info.Size(),
+					LastUsed: info.ModTime(),
+				}
+			}
+		}
+	}
+
+	// 1. Scan the main cache directory.
+	scanDir(m.cacheDir)
+
+	// 2. Scan all configured watched directories.
+	if cfg, err := LoadConfig(); err == nil {
+		for _, wd := range cfg.WatchedDirs {
+			scanDir(wd)
+		}
 	}
 
 	var models []ModelEntry
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".gguf") {
-			continue
-		}
-		info, err := entry.Info()
-		if err != nil {
-			continue
-		}
-		models = append(models, ModelEntry{
-			Name:     strings.TrimSuffix(entry.Name(), ".gguf"),
-			Path:     filepath.Join(m.cacheDir, entry.Name()),
-			Size:     info.Size(),
-			LastUsed: info.ModTime(),
-		})
+	for _, entry := range modelMap {
+		models = append(models, entry)
 	}
 
 	sort.Slice(models, func(i, j int) bool {
@@ -131,11 +159,23 @@ func (m *ModelManager) GetPath(name string) (string, error) {
 		name = name + ".gguf"
 	}
 
+	// 1. Check default cache dir
 	path := filepath.Join(m.cacheDir, name)
-	if _, err := os.Stat(path); err != nil {
-		return "", fmt.Errorf("model %q not found in cache", name)
+	if _, err := os.Stat(path); err == nil {
+		return path, nil
 	}
-	return path, nil
+
+	// 2. Check all watched directories
+	if cfg, err := LoadConfig(); err == nil {
+		for _, wd := range cfg.WatchedDirs {
+			p := filepath.Join(wd, name)
+			if _, err := os.Stat(p); err == nil {
+				return p, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("model %q not found in cache or watched directories", name)
 }
 
 // Remove deletes a cached model by name.

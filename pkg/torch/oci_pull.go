@@ -48,7 +48,7 @@ import (
 // OCIPuller manages downloading models from OCI-compatible registries.
 //
 // Fields:
-//   - CacheDir: where downloaded models are stored (default ~/.itaktorch/models/)
+//   - CacheDir: where downloaded models are stored (default ~/.torch/models/)
 //   - Progress: optional callback for download progress reporting
 //   - Auth: optional authenticator (defaults to Docker config / anonymous)
 type OCIPuller struct {
@@ -83,7 +83,7 @@ var modelMediaTypes = []string{
 // NewOCIPuller creates an OCI registry puller.
 //
 // Parameters:
-//   - cacheDir: where to store downloaded models. If empty, uses ~/.itaktorch/models/
+//   - cacheDir: where to store downloaded models. If empty, uses ~/.torch/models/
 //   - username: registry username (empty for anonymous/Docker config auth)
 //   - password: registry password or token
 func NewOCIPuller(cacheDir, username, password string) (*OCIPuller, error) {
@@ -93,7 +93,7 @@ func NewOCIPuller(cacheDir, username, password string) (*OCIPuller, error) {
 		if err != nil {
 			return nil, fmt.Errorf("get home dir: %w", err)
 		}
-		cacheDir = filepath.Join(home, ".itaktorch", "models")
+		cacheDir = filepath.Join(home, ".torch", "models")
 	}
 
 	// Create cache directory if missing.

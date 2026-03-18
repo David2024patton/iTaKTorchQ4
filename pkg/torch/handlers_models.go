@@ -30,7 +30,7 @@ import (
 //
 // Response:
 //
-//	{"local_path": "~/.itaktorch/models/qwen3-0.6b-q4_k_m.gguf", "size": 419430400, "sha256": "abc..."}
+//	{"local_path": "~/.torch/models/qwen3-0.6b-q4_k_m.gguf", "size": 419430400, "sha256": "abc..."}
 func (s *Server) handleModelPull(w http.ResponseWriter, r *http.Request) {
 	// Only accept POST requests.
 	if r.Method != http.MethodPost {

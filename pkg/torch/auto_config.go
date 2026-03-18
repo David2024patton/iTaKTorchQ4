@@ -310,7 +310,7 @@ func RecommendLibPath(ac AutoConfig) string {
 
 	// Also check user home directory.
 	if home, err := os.UserHomeDir(); err == nil {
-		candidates = append(candidates, home+"/.itaktorch/lib")
+		candidates = append(candidates, home+"/.torch/lib")
 	}
 
 	for _, c := range candidates {

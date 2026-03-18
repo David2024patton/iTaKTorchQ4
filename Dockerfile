@@ -1,8 +1,8 @@
 # iTaK Torch - GPU-accelerated Docker image
 # Uses pre-built binary + CUDA libs for full GPU inference.
 #
-# Build:  docker build -t itaktorch .
-# Run:    docker run --gpus all -p 39271:39271 -v /path/to/models:/models itaktorch
+# Build:  docker build -t torch .
+# Run:    docker run --gpus all -p 39271:39271 -v /path/to/models:/models torch
 
 FROM nvidia/cuda:12.8.0-runtime-ubuntu24.04
 
@@ -16,8 +16,8 @@ ENV NVIDIA_VISIBLE_DEVICES=all
 ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
 
 # Copy pre-built binary and CUDA libs
-COPY itaktorch_linux_amd64 /usr/local/bin/itaktorch
-RUN chmod +x /usr/local/bin/itaktorch
+COPY torch_linux_amd64 /usr/local/bin/torch
+RUN chmod +x /usr/local/bin/torch
 COPY lib/linux_amd64/ /app/lib/linux_amd64/
 
 # Create .so.0 symlinks and register with ldconfig
@@ -26,7 +26,7 @@ RUN cd /app/lib/linux_amd64 && \
     ln -sf libggml.so libggml.so.0 && \
     ln -sf libggml-base.so libggml-base.so.0 && \
     ln -sf libggml-cuda.so libggml-cuda.so.0 && \
-    echo "/app/lib/linux_amd64" > /etc/ld.so.conf.d/itaktorch.conf && \
+    echo "/app/lib/linux_amd64" > /etc/ld.so.conf.d/torch.conf && \
     ldconfig
 
 # Set lib path
@@ -42,5 +42,5 @@ EXPOSE 39271
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
     CMD wget -q -O /dev/null http://localhost:39271/health || exit 1
 
-ENTRYPOINT ["itaktorch"]
+ENTRYPOINT ["torch"]
 CMD ["serve", "--port", "39271", "--models-dir", "/models"]

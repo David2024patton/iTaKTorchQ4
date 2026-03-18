@@ -4,7 +4,7 @@
 
 All 67 Go source files have been successfully migrated from GOAgent to iTaK Torch with updated module path:
 - **Old module**: `github.com/David2024patton/iTaKAgent`
-- **New module**: `github.com/David2024patton/iTaKTorch`
+- **New module**: `github.com/David2024patton/torch`
 
 ## Build Instructions
 
@@ -25,10 +25,10 @@ cd "e:\.agent\iTaK Torch"
 go mod tidy
 
 # Build standalone executable (Windows)
-go build -o bin/itaktorch.exe ./cmd/itaktorch
+go build -o bin/torch.exe ./cmd/torch
 
 # Verify binary created
-ls -lh bin/itaktorch.exe
+ls -lh bin/torch.exe
 
 # Expected output: ~5-8 MB executable with all backends embedded
 ```
@@ -37,14 +37,14 @@ ls -lh bin/itaktorch.exe
 
 ```powershell
 # CPU-only build (smallest)
-go build -ldflags="-X main.Backend=cpu" -o bin/itaktorch-cpu.exe ./cmd/itaktorch
+go build -ldflags="-X main.Backend=cpu" -o bin/torch-cpu.exe ./cmd/torch
 
 # Vulkan-enabled build (cross-GPU support)
 $env:GGML_VK_DEVICE = "0"
-go build -ldflags="-X main.Backend=vulkan" -o bin/itaktorch-vulkan.exe ./cmd/itaktorch
+go build -ldflags="-X main.Backend=vulkan" -o bin/torch-vulkan.exe ./cmd/torch
 
 # NVIDIA CUDA build
-go build -ldflags="-X main.Backend=cuda" -o bin/itaktorch-cuda.exe ./cmd/itaktorch
+go build -ldflags="-X main.Backend=cuda" -o bin/torch-cuda.exe ./cmd/torch
 ```
 
 ## Testing
@@ -54,7 +54,7 @@ go build -ldflags="-X main.Backend=cuda" -o bin/itaktorch-cuda.exe ./cmd/itaktor
 cd "e:\.agent\iTaK Torch"
 
 # Start mock server
-.\bin\itaktorch.exe serve --mock --port 41934
+.\bin\torch.exe serve --mock --port 41934
 
 # In another terminal, test the API
 $response = Invoke-RestMethod -Uri "http://localhost:41934/v1/chat/completions" `
@@ -65,15 +65,15 @@ $response = Invoke-RestMethod -Uri "http://localhost:41934/v1/chat/completions" 
 $response | ConvertTo-Json
 ```
 
-**Expected output**: Mock engine returns `[iTaKTorch Mock / mock] Received: "Hello"`
+**Expected output**: Mock engine returns `[torch Mock / mock] Received: "Hello"`
 
 ### 2. Recommend Hardware
 ```powershell
 # Detect your system specs and recommended models
-.\bin\itaktorch.exe recommend
+.\bin\torch.exe recommend
 
 # Output example:
-# iTaKTorch Hardware Detection
+# torch Hardware Detection
 # =========================
 #   Estimated RAM:  16384 MB
 #   GPU:            Not detected (CPU-only mode)
@@ -87,23 +87,23 @@ $response | ConvertTo-Json
 ### 3. Model Catalog
 ```powershell
 # List all available models
-.\bin\itaktorch.exe catalog
+.\bin\torch.exe catalog
 
 # Pull a model
-.\bin\itaktorch.exe pull qwen2.5-0.5b-q4_k_m
+.\bin\torch.exe pull qwen2.5-0.5b-q4_k_m
 
 # Check downloaded models
-.\bin\itaktorch.exe models
+.\bin\torch.exe models
 ```
 
 ### 4. Full Integration Test
 ```powershell
 # Download a small model (if not already cached)
-.\bin\itaktorch.exe pull qwen2.5-0.5b-q4_k_m
+.\bin\torch.exe pull qwen2.5-0.5b-q4_k_m
 
 # Start the actual server with GPU acceleration
-.\bin\itaktorch.exe serve `
-  --model ~/.itaktorch/models/qwen2.5-0.5b-q4_k_m.gguf `
+.\bin\torch.exe serve `
+  --model ~/.torch/models/qwen2.5-0.5b-q4_k_m.gguf `
   --gpu-layers 10 `
   --ctx 512 `
   --batch 128 `
@@ -131,9 +131,9 @@ $response.choices[0].message.content
 
 ```
 iTaK Torch/
-├── go.mod                          # Module: github.com/David2024patton/iTaKTorch
+├── go.mod                          # Module: github.com/David2024patton/torch
 ├── cmd/
-│   └── itaktorch/
+│   └── torch/
 │       └── main.go                 # CLI entry point
 ├── pkg/torch/
 │   ├── continuous_batch.go         # Pipeline batching
@@ -176,7 +176,7 @@ iTaK Torch/
 ### Verify Module Path
 ```powershell
 Get-Content go.mod | Select-String "^module"
-# Should output: module github.com/David2024patton/iTaKTorch
+# Should output: module github.com/David2024patton/torch
 ```
 
 ### Verify Import Updates
@@ -186,7 +186,7 @@ Select-String -Path "pkg\torch\**\*.go" -Pattern "iTaKAgent" -Recurse
 # Should return nothing
 
 # Verify new imports are present
-Select-String -Path "pkg\torch\**\*.go" -Pattern "iTaKTorch" -Recurse | Measure-Object
+Select-String -Path "pkg\torch\**\*.go" -Pattern "torch" -Recurse | Measure-Object
 # Should show >50 matches
 ```
 
@@ -194,7 +194,7 @@ Select-String -Path "pkg\torch\**\*.go" -Pattern "iTaKTorch" -Recurse | Measure-
 ```powershell
 # This will verify all imports resolve correctly
 go mod tidy
-go build -o /dev/null ./cmd/itaktorch 2>&1
+go build -o /dev/null ./cmd/torch 2>&1
 # Should show no import errors
 ```
 
@@ -247,7 +247,7 @@ GET  /metrics                       # Performance metrics
 # Clear Go cache and retry
 go clean -cache
 go mod tidy
-go build ./cmd/itaktorch
+go build ./cmd/torch
 ```
 
 ### Runtime Backend Not Found
@@ -257,30 +257,30 @@ ls lib/windows_amd64*
 
 # Check environment
 $env:ITAK_TORCH_LIB = ".\lib"
-.\bin\itaktorch.exe serve --mock --port 41934
+.\bin\torch.exe serve --mock --port 41934
 ```
 
 ### Port Already in Use
 ```powershell
 # Use different port
-.\bin\itaktorch.exe serve --mock --port 11434
+.\bin\torch.exe serve --mock --port 11434
 
 # Or kill existing process
-Get-Process itaktorch | Stop-Process -Force
+Get-Process torch | Stop-Process -Force
 ```
 
 ## Next Steps
 
 1. ✅ Binary built successfully
 2. ✅ Mock mode tested
-3. ⏭️ Download a model: `.\bin\itaktorch recommend`
+3. ⏭️ Download a model: `.\bin\torch recommend`
 4. ⏭️ Run against real model
 5. ⏭️ Benchmark performance: `go test -bench ./pkg/torch/...`
 6. ⏭️ Deploy to production with Docker
 
 ## Project Links
 
-- **Repository**: `github.com/David2024patton/iTaKTorch`
+- **Repository**: `github.com/David2024patton/torch`
 - **Previously**: Part of `github.com/David2024patton/iTaKAgent`
 - **Benchmarks**: See `benchmarks/` directory for performance data
 - **Documentation**: See `docs/` directory for architecture deep-dives

@@ -35,7 +35,7 @@ import (
 // HFPuller manages downloading models from HuggingFace Hub.
 //
 // Fields:
-//   - CacheDir: where downloaded models are stored (default ~/.itaktorch/models/)
+//   - CacheDir: where downloaded models are stored (default ~/.torch/models/)
 //   - Token: optional HuggingFace API token for gated/private models
 //   - Progress: optional callback for download progress reporting
 type HFPuller struct {
@@ -88,7 +88,7 @@ const (
 // NewHFPuller creates a HuggingFace model puller.
 //
 // Parameters:
-//   - cacheDir: where to store downloaded models. If empty, uses ~/.itaktorch/models/
+//   - cacheDir: where to store downloaded models. If empty, uses ~/.torch/models/
 //   - token: optional HF API token for gated models. If empty, only public models work.
 func NewHFPuller(cacheDir, token string) (*HFPuller, error) {
 	// Default cache directory.
@@ -97,7 +97,7 @@ func NewHFPuller(cacheDir, token string) (*HFPuller, error) {
 		if err != nil {
 			return nil, fmt.Errorf("get home dir: %w", err)
 		}
-		cacheDir = filepath.Join(home, ".itaktorch", "models")
+		cacheDir = filepath.Join(home, ".torch", "models")
 	}
 
 	// Create cache directory if it doesn't exist.
@@ -203,7 +203,7 @@ func (p *HFPuller) ListRepoFiles(repo string) ([]HFFile, error) {
 // Example:
 //
 //	result, err := puller.Pull(ctx, "Qwen/Qwen3-0.6B-GGUF", "qwen3-0.6b-q4_k_m.gguf")
-//	// result.LocalPath = "~/.itaktorch/models/qwen3-0.6b-q4_k_m.gguf"
+//	// result.LocalPath = "~/.torch/models/qwen3-0.6b-q4_k_m.gguf"
 func (p *HFPuller) Pull(ctx context.Context, repo, filename string) (*HFPullResult, error) {
 	// Security: validate the filename.
 	if strings.Contains(filename, "..") || strings.Contains(filename, "/") || strings.Contains(filename, "\\") {

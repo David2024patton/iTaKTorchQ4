@@ -97,7 +97,7 @@ func WithRateLimit(requestsPerMinute, burstSize int) ServerOption {
 }
 
 // WithHFPuller enables HuggingFace model pull/search endpoints.
-// cacheDir is where models are stored (empty = ~/.itaktorch/models/).
+// cacheDir is where models are stored (empty = ~/.torch/models/).
 // token is the optional HF API token for gated models.
 func WithHFPuller(cacheDir, token string) ServerOption {
 	return func(s *Server) {
@@ -119,7 +119,7 @@ func WithResponseCache(maxEntries int) ServerOption {
 }
 
 // WithOllamaPuller enables Ollama registry pull/search endpoints.
-// cacheDir is where models are stored (empty = ~/.itaktorch/models/).
+// cacheDir is where models are stored (empty = ~/.torch/models/).
 func WithOllamaPuller(cacheDir string) ServerOption {
 	return func(s *Server) {
 		puller, err := NewOllamaPuller(cacheDir)
