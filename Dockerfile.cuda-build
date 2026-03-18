@@ -1,0 +1,17 @@
+# Build llama.cpp CUDA libs for all NVIDIA GPU generations
+FROM nvidia/cuda:12.8.0-devel-ubuntu24.04
+
+RUN apt-get update && apt-get install -y git cmake && rm -rf /var/lib/apt/lists/*
+
+RUN git clone --depth 1 https://github.com/ggml-org/llama.cpp.git /llama.cpp
+
+WORKDIR /llama.cpp/build
+RUN cmake .. \
+    -DBUILD_SHARED_LIBS=ON \
+    -DGGML_CUDA=ON \
+    -DCMAKE_CUDA_ARCHITECTURES="52;61;70;75;80;86;89;90" \
+    -DCMAKE_BUILD_TYPE=Release \
+    && cmake --build . --target ggml llama -j$(nproc)
+
+# Copy outputs to /out for extraction
+RUN mkdir -p /out && cp bin/lib*.so* /out/
