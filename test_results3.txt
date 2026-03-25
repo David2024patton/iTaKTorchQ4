@@ -1,0 +1,16 @@
+﻿=== RUN   TestModelRegistryListAvailable
+--- PASS: TestModelRegistryListAvailable (0.00s)
+=== RUN   TestModelRegistryResolveModel
+--- PASS: TestModelRegistryResolveModel (0.00s)
+=== RUN   TestModelRegistryStats
+--- PASS: TestModelRegistryStats (0.00s)
+=== RUN   TestModelRegistryClose
+--- PASS: TestModelRegistryClose (0.00s)
+=== RUN   TestServerModelsWithRegistry
+[iTaK Torch] Scheduler started (queue capacity: 64, priority lanes: high+normal)
+--- PASS: TestServerModelsWithRegistry (0.00s)
+=== RUN   TestServerModels
+[iTaK Torch] Scheduler started (queue capacity: 64, priority lanes: high+normal)
+--- PASS: TestServerModels (0.00s)
+PASS
+ok  	github.com/David2024patton/iTaKTorch/pkg/torch	0.129s

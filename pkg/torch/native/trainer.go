@@ -69,6 +69,9 @@ type Trainer struct {
 	optimizer *AdamW
 	params    []*GradTensor // All trainable parameters
 
+	// Progress tracking.
+	Progress  *TrainingProgress
+
 	// Metrics.
 	globalStep    int
 	totalTokens   int64
@@ -139,6 +142,11 @@ func NewTrainer(engine *NativeEngine, config TrainerConfig) *Trainer {
 	}
 
 	return t
+}
+
+// AllParams returns all trainable parameters (for gradient accumulation).
+func (t *Trainer) AllParams() []*GradTensor {
+	return t.params
 }
 
 // TrainOnFile loads a text dataset and runs training.
@@ -230,8 +238,15 @@ func (t *Trainer) TrainOnDataset(dataset *TrainingDataset) error {
 				elapsed := time.Since(t.startTime)
 				tps := float64(t.totalTokens) / elapsed.Seconds()
 				lr := t.optimizer.GetLR()
-				fmt.Printf("[Step %d] loss=%.4f lr=%.2e tps=%.0f elapsed=%v\n",
-					t.globalStep, batchLoss, lr, tps, elapsed.Round(time.Second))
+
+				// Use progress bar if available.
+				if t.Progress != nil {
+					t.Progress.SetEpoch(epoch)
+					t.Progress.Update(t.globalStep, batchLoss, lr, t.totalTokens)
+				} else {
+					fmt.Printf("[Step %d] loss=%.4f lr=%.2e tps=%.0f elapsed=%v\n",
+						t.globalStep, batchLoss, lr, tps, elapsed.Round(time.Second))
+				}
 			}
 
 			// Checkpoint.
@@ -243,7 +258,7 @@ func (t *Trainer) TrainOnDataset(dataset *TrainingDataset) error {
 		avgLoss := epochLoss / float32(batchCount)
 		t.losses = append(t.losses, avgLoss)
 		epochDur := time.Since(epochStart)
-		fmt.Printf("[Epoch %d/%d] avg_loss=%.4f tokens=%d duration=%v\n",
+		fmt.Printf("\n[Epoch %d/%d] avg_loss=%.4f tokens=%d duration=%v\n",
 			epoch+1, t.config.Epochs, avgLoss, epochTokens, epochDur.Round(time.Second))
 	}
 

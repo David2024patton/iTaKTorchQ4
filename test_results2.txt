@@ -1,0 +1,20 @@
+﻿=== RUN   TestModelRegistryListAvailable
+    model_registry_test.go:63: ListAvailable count = 87, want 3
+--- FAIL: TestModelRegistryListAvailable (0.01s)
+=== RUN   TestModelRegistryResolveModel
+    model_registry_test.go:104: expected error for nonexistent model
+--- FAIL: TestModelRegistryResolveModel (0.01s)
+=== RUN   TestModelRegistryStats
+--- PASS: TestModelRegistryStats (0.00s)
+=== RUN   TestModelRegistryClose
+--- PASS: TestModelRegistryClose (0.00s)
+=== RUN   TestServerModelsWithRegistry
+[iTaK Torch] Scheduler started (queue capacity: 64, priority lanes: high+normal)
+    model_registry_test.go:174: models count = 86, want 2
+--- FAIL: TestServerModelsWithRegistry (0.01s)
+=== RUN   TestServerModels
+[iTaK Torch] Scheduler started (queue capacity: 64, priority lanes: high+normal)
+--- PASS: TestServerModels (0.00s)
+FAIL
+FAIL	github.com/David2024patton/iTaKTorch/pkg/torch	0.177s
+FAIL

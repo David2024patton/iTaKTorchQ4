@@ -1,5 +1,4 @@
 //go:build wgpu && cgo
-
 // wgpu.go implements GPU-accelerated matrix multiplication using WebGPU.
 //
 // This file is only compiled when the `wgpu` build tag is set:

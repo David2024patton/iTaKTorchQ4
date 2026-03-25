@@ -7,7 +7,7 @@
 // Supported endpoints:
 //   POST /api/generate       - text generation (Ollama format)
 //   POST /api/chat           - chat completion (Ollama format)
-//   GET  /api/tags           - list loaded models
+//   GET  /api/tags           - list loaded models (+ upstream Ollama models if configured)
 //   POST /api/show           - show model info
 //   GET  /api/version        - server version
 //
@@ -16,8 +16,10 @@ package torch
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -121,6 +123,65 @@ type OllamaModelDetail struct {
 
 // --- Handlers ---
 
+// isLocalModel returns true if the named model can actually be served by Torch
+// (i.e. it resolves to a loadable .gguf file or is already loaded in memory).
+// Models that are listed but can't be served (SafeTensors, Ollama blobs, vocab
+// files) return false so they get proxied to upstream Ollama.
+func (s *Server) isLocalModel(name string) bool {
+	if s.registry == nil {
+		return true // single-model mode, always local
+	}
+	return s.registry.CanServe(name)
+}
+
+// proxyToUpstream forwards the full HTTP request to the upstream Ollama server.
+// Used when Torch receives a request for a model it lists via aggregation but
+// can't serve locally (e.g. Ollama-only models). The response is streamed back
+// to the client transparently.
+func (s *Server) proxyToUpstream(w http.ResponseWriter, r *http.Request, body []byte) {
+	targetURL := strings.TrimRight(s.ollamaUpstream, "/") + r.URL.Path
+
+	proxyReq, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL, bytes.NewReader(body))
+	if err != nil {
+		s.writeError(w, http.StatusBadGateway, fmt.Sprintf("upstream proxy error: %v", err))
+		return
+	}
+	proxyReq.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 5 * time.Minute} // long timeout for inference
+	resp, err := client.Do(proxyReq)
+	if err != nil {
+		s.writeError(w, http.StatusBadGateway, fmt.Sprintf("upstream unreachable: %v", err))
+		return
+	}
+	defer resp.Body.Close()
+
+	// Copy upstream headers.
+	for key, vals := range resp.Header {
+		for _, val := range vals {
+			w.Header().Add(key, val)
+		}
+	}
+	w.WriteHeader(resp.StatusCode)
+
+	// Stream the response body back.
+	if flusher, ok := w.(http.Flusher); ok {
+		buf := make([]byte, 4096)
+		for {
+			n, readErr := resp.Body.Read(buf)
+			if n > 0 {
+				w.Write(buf[:n])
+				flusher.Flush()
+			}
+			if readErr != nil {
+				break
+			}
+		}
+	} else {
+		io.Copy(w, resp.Body)
+	}
+}
+
 // handleOllamaGenerate handles POST /api/generate (Ollama-compatible text generation).
 func (s *Server) handleOllamaGenerate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -128,9 +189,24 @@ func (s *Server) handleOllamaGenerate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Read body so we can inspect the model name and optionally proxy.
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		s.writeError(w, http.StatusBadRequest, "failed to read request body")
+		return
+	}
+	r.Body.Close()
+
 	var req OllamaGenerateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.Unmarshal(body, &req); err != nil {
 		s.writeError(w, http.StatusBadRequest, fmt.Sprintf("invalid JSON: %v", err))
+		return
+	}
+
+	// If this model isn't a local GGUF, proxy to upstream Ollama.
+	if s.ollamaUpstream != "" && !s.isLocalModel(req.Model) {
+		s.debugf("[PROXY] Forwarding /api/generate for model %q to %s", req.Model, s.ollamaUpstream)
+		s.proxyToUpstream(w, r, body)
 		return
 	}
 
@@ -157,13 +233,27 @@ func (s *Server) handleOllamaGenerate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Non-streaming: run inference and return full response.
+
+	// Resolve engine: use registry if available (multi-model mode).
+	scheduler := s.scheduler
+	if s.registry != nil && req.Model != "" {
+		resolved, err := s.registry.GetOrLoad(req.Model)
+		if err != nil {
+			s.writeError(w, http.StatusNotFound, fmt.Sprintf("model not found: %v", err))
+			return
+		}
+		scheduler = NewScheduler(resolved, 64)
+		scheduler.Start()
+		defer scheduler.Stop()
+	}
+
 	inferReq := &InferenceRequest{
 		Messages: messages,
 		Params:   params,
 		Ctx:      r.Context(),
 	}
 
-	s.scheduler.Submit(inferReq)
+	scheduler.Submit(inferReq)
 
 	var result InferenceResult
 	select {
@@ -206,9 +296,24 @@ func (s *Server) handleOllamaChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Read body so we can inspect the model name and optionally proxy.
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		s.writeError(w, http.StatusBadRequest, "failed to read request body")
+		return
+	}
+	r.Body.Close()
+
 	var req OllamaChatRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.Unmarshal(body, &req); err != nil {
 		s.writeError(w, http.StatusBadRequest, fmt.Sprintf("invalid JSON: %v", err))
+		return
+	}
+
+	// If this model isn't a local GGUF, proxy to upstream Ollama.
+	if s.ollamaUpstream != "" && !s.isLocalModel(req.Model) {
+		s.debugf("[PROXY] Forwarding /api/chat for model %q to %s", req.Model, s.ollamaUpstream)
+		s.proxyToUpstream(w, r, body)
 		return
 	}
 
@@ -233,13 +338,28 @@ func (s *Server) handleOllamaChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Non-streaming.
+
+	// Resolve engine: use registry if available (multi-model mode).
+	scheduler := s.scheduler
+	if s.registry != nil && req.Model != "" {
+		resolved, err := s.registry.GetOrLoad(req.Model)
+		if err != nil {
+			s.writeError(w, http.StatusNotFound, fmt.Sprintf("model not found: %v", err))
+			return
+		}
+		// Create an ad-hoc scheduler for the resolved engine.
+		scheduler = NewScheduler(resolved, 64)
+		scheduler.Start()
+		defer scheduler.Stop()
+	}
+
 	inferReq := &InferenceRequest{
 		Messages: messages,
 		Params:   params,
 		Ctx:      r.Context(),
 	}
 
-	s.scheduler.Submit(inferReq)
+	scheduler.Submit(inferReq)
 
 	var result InferenceResult
 	select {
@@ -281,24 +401,27 @@ func (s *Server) handleOllamaChat(w http.ResponseWriter, r *http.Request) {
 // handleOllamaTags handles GET /api/tags (list available models).
 // Lists ALL available models from the models directory, not just loaded ones.
 // This matches Ollama's behavior where /api/tags shows all pulled models.
+// If an upstream Ollama URL is configured (via OLLAMA_UPSTREAM env var or
+// --ollama-upstream flag), models from that server are aggregated into the list.
 func (s *Server) handleOllamaTags(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
 		return
 	}
 
+	seen := make(map[string]bool)
 	models := make([]OllamaModelInfo, 0)
 
-	// Multi-model mode: list ALL available .gguf files from the models directory.
-	// Open WebUI expects to see all models on startup, not just loaded ones.
+	// 1. Local models from Torch's own models directory.
 	if s.registry != nil {
 		for _, mi := range s.registry.ListAvailable() {
 			ollamaName := mi.ID
+			seen[ollamaName] = true
 			models = append(models, OllamaModelInfo{
 				Name:       ollamaName,
 				Model:      ollamaName,
 				ModifiedAt: time.Now(),
-			Size:       mi.SizeBytes,
+				Size:       mi.SizeBytes,
 				Details: OllamaModelDetail{
 					Format:   "gguf",
 					Family:   inferFamily(ollamaName),
@@ -307,8 +430,8 @@ func (s *Server) handleOllamaTags(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 	} else if s.engine != nil {
-		// Single-model mode: list the loaded model.
 		name := s.engine.ModelName()
+		seen[name] = true
 		models = append(models, OllamaModelInfo{
 			Name:       name,
 			Model:      name,
@@ -321,8 +444,48 @@ func (s *Server) handleOllamaTags(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	// 2. Aggregate upstream Ollama models if configured.
+	if s.ollamaUpstream != "" {
+		upstream := s.fetchUpstreamOllamaModels()
+		for _, m := range upstream {
+			if !seen[m.Name] {
+				seen[m.Name] = true
+				models = append(models, m)
+			}
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	s.writeJSON(w, map[string]interface{}{"models": models})
+}
+
+// fetchUpstreamOllamaModels queries an upstream Ollama server's /api/tags
+// and returns the model list. Returns nil on any error (best-effort).
+func (s *Server) fetchUpstreamOllamaModels() []OllamaModelInfo {
+	url := strings.TrimRight(s.ollamaUpstream, "/") + "/api/tags"
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		s.debugf("[UPSTREAM] Failed to fetch models from %s: %v", url, err)
+		return nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		s.debugf("[UPSTREAM] Non-200 from %s: %d", url, resp.StatusCode)
+		return nil
+	}
+
+	var result struct {
+		Models []OllamaModelInfo `json:"models"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		s.debugf("[UPSTREAM] Failed to decode response from %s: %v", url, err)
+		return nil
+	}
+
+	s.debugf("[UPSTREAM] Fetched %d models from %s", len(result.Models), s.ollamaUpstream)
+	return result.Models
 }
 
 // handleOllamaVersion handles GET /api/version.
@@ -382,6 +545,19 @@ func (s *Server) handleOllamaStreamGenerate(w http.ResponseWriter, r *http.Reque
 
 	bw := bufio.NewWriter(w)
 
+	// Resolve engine: use registry if available (multi-model mode).
+	scheduler := s.scheduler
+	if s.registry != nil && model != "" {
+		resolved, err := s.registry.GetOrLoad(model)
+		if err != nil {
+			s.writeError(w, http.StatusNotFound, fmt.Sprintf("model not found: %v", err))
+			return
+		}
+		scheduler = NewScheduler(resolved, 64)
+		scheduler.Start()
+		defer scheduler.Stop()
+	}
+
 	streamCh := make(chan string, 32)
 	inferReq := &InferenceRequest{
 		Messages: messages,
@@ -390,7 +566,7 @@ func (s *Server) handleOllamaStreamGenerate(w http.ResponseWriter, r *http.Reque
 		StreamCh: streamCh,
 	}
 
-	s.scheduler.Submit(inferReq)
+	scheduler.Submit(inferReq)
 
 	totalTokens := 0
 	for {
@@ -451,6 +627,20 @@ func (s *Server) handleOllamaStreamChat(w http.ResponseWriter, r *http.Request,
 
 	bw := bufio.NewWriter(w)
 
+	// Resolve engine: use registry if available (multi-model mode).
+	scheduler := s.scheduler
+	if s.registry != nil && model != "" {
+		resolved, err := s.registry.GetOrLoad(model)
+		if err != nil {
+			s.writeError(w, http.StatusNotFound, fmt.Sprintf("model not found: %v", err))
+			return
+		}
+		// Create an ad-hoc scheduler for the resolved engine.
+		scheduler = NewScheduler(resolved, 64)
+		scheduler.Start()
+		defer scheduler.Stop()
+	}
+
 	streamCh := make(chan string, 32)
 	inferReq := &InferenceRequest{
 		Messages: messages,
@@ -459,7 +649,7 @@ func (s *Server) handleOllamaStreamChat(w http.ResponseWriter, r *http.Request,
 		StreamCh: streamCh,
 	}
 
-	s.scheduler.Submit(inferReq)
+	scheduler.Submit(inferReq)
 
 	totalTokens := 0
 	for {

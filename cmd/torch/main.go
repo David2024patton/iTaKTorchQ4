@@ -60,6 +60,8 @@ func main() {
 		cmdBench(os.Args[2:])
 	case "chat":
 		cmdChat(os.Args[2:])
+	case "train":
+		cmdTrain(os.Args[2:])
 	case "help", "--help", "-h":
 		printUsage()
 	default:
@@ -140,6 +142,7 @@ func cmdServe(args []string) {
 	prefixCacheSize := fs.Int("prefix-cache-size", 16, "Max cached KV states for identical system prompts (0=disabled)")
 	enableOllama := fs.Bool("enable-ollama", false, "Enable Ollama model pull endpoint (/v1/models/pull/ollama)")
 	ollamaAPI := fs.Bool("ollama-api", true, "Enable Ollama-compatible API routes (/api/generate, /api/chat, etc.)")
+	ollamaUpstream := fs.String("ollama-upstream", "", "Upstream Ollama URL to aggregate models from (e.g. http://localhost:11434)")
 	noMmap := fs.Bool("no-mmap", false, "Disable mmap (required on WSL2 for /mnt/ paths)")
 	pgoCapture := fs.String("pgo-capture", "", "Save CPU profile to file on shutdown (for PGO builds)")
 	goGC := fs.Int("gogc", 100, "Garbage collection target percentage (100=default, 200=less GC/more GC, off=no GC)")
@@ -198,6 +201,7 @@ func cmdServe(args []string) {
 			fmt.Fprintf(os.Stderr, "[iTaK Torch] Failed to initialize model registry: %v\n", err)
 			os.Exit(1)
 		}
+		registry.LoadWatchedDirs()
 
 		// Use a mock engine as placeholder (registry handles real engines).
 		engine = torch.NewMockEngine("registry-placeholder")
@@ -317,6 +321,20 @@ func cmdServe(args []string) {
 		fmt.Println("[iTaK Torch] Ollama-compatible API enabled (/api/generate, /api/chat, /api/tags)")
 	}
 
+	// Ollama upstream aggregation: merge local Torch models with upstream Ollama models.
+	// Supports --ollama-upstream flag or OLLAMA_UPSTREAM / OLLAMA_BASE_URL env vars.
+	upstreamURL := *ollamaUpstream
+	if upstreamURL == "" {
+		upstreamURL = os.Getenv("OLLAMA_UPSTREAM")
+	}
+	if upstreamURL == "" {
+		upstreamURL = os.Getenv("OLLAMA_BASE_URL")
+	}
+	if upstreamURL != "" {
+		serverOpts = append(serverOpts, torch.WithOllamaUpstream(upstreamURL))
+		fmt.Printf("[iTaK Torch] Upstream Ollama aggregation: %s\n", upstreamURL)
+	}
+
 	server := torch.NewServer(engine, *port, serverOpts...)
 
 	// Graceful shutdown on Ctrl+C.
@@ -378,8 +396,48 @@ func cmdModels() {
 		return
 	}
 
+	// Detect new models by comparing per-directory counts against stored config.
+	cfg, _ := torch.LoadConfig()
+	newCount := 0
+	dirCount := 1 // cache dir always counts
+	currentCounts := make(map[string]int)
+
+	// Count models per directory from the list results.
+	dirModels := make(map[string]int)
+	for _, m := range models {
+		dir := filepath.Dir(m.Path)
+		dirModels[dir]++
+	}
+
+	for dir, count := range dirModels {
+		currentCounts[dir] = count
+		if cfg != nil {
+			if prev, ok := cfg.DirModCounts[dir]; ok {
+				if count > prev {
+					newCount += count - prev
+				}
+			} else {
+				// First time seeing this directory -- all models are "new".
+				newCount += count
+			}
+		}
+	}
+	dirCount = len(dirModels)
+
+	// Persist the current counts for next run.
+	if cfg != nil {
+		cfg.DirModCounts = currentCounts
+		torch.SaveConfig(cfg)
+	}
+
 	printBanner()
-	fmt.Printf("\033[1mCached models\033[0m (%s):\n\n", mgr.CacheDir())
+
+	// Summary line showing total models, directories, and new count.
+	if newCount > 0 {
+		fmt.Printf("\033[1mModels\033[0m (%d across %d dirs, \033[32m%d new\033[0m):\n\n", len(models), dirCount, newCount)
+	} else {
+		fmt.Printf("\033[1mModels\033[0m (%d across %d dirs):\n\n", len(models), dirCount)
+	}
 
 	maxLen := 40
 	for _, m := range models {

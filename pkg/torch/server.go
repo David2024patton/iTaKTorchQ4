@@ -68,6 +68,10 @@ type Server struct {
 	// When true, /api/generate, /api/chat, /api/tags, /api/show, /api/version are mounted.
 	ollamaCompat bool
 
+	// Upstream Ollama URL for model aggregation.
+	// When set, /api/tags merges local Torch models with models from this Ollama server.
+	ollamaUpstream string
+
 	// Training manager (optional - nil disables training endpoints).
 	trainingMgr *TrainingManager
 }
@@ -136,6 +140,13 @@ func WithOllamaPuller(cacheDir string) ServerOption {
 // This makes Torch a drop-in replacement for Ollama with existing tools.
 func WithOllamaCompat() ServerOption {
 	return func(s *Server) { s.ollamaCompat = true }
+}
+
+// WithOllamaUpstream sets an upstream Ollama URL for model aggregation.
+// When set, /api/tags merges local Torch models with models from this Ollama server.
+// Example: "http://localhost:11434" or "http://host.docker.internal:11434".
+func WithOllamaUpstream(url string) ServerOption {
+	return func(s *Server) { s.ollamaUpstream = url }
 }
 
 // WithEventBus connects the server to Core's event bus for cross-module events.

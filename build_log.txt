@@ -1,0 +1,105 @@
+=============================================
+   iTaK Torch - Vulkan Docker Build Script   
+=============================================
+This script runs in a separate window so the AI agent doesn't freeze.
+
+--- Step 1: Building Linux Go Binary ---
+Linux Go Binary Built Successfully.
+
+--- Step 2: Compiling llama.cpp Vulkan (Docker Multi-stage Build) ---
+This will take 5-10 minutes to download and compile everything. Please wait...
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 2.61kB done
+#1 DONE 0.0s
+
+#2 [auth] library/ubuntu:pull token for registry-1.docker.io
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/ubuntu:24.04
+#3 DONE 0.9s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 375B done
+#4 DONE 0.0s
+
+#5 [builder 1/6] FROM docker.io/library/ubuntu:24.04@sha256:186072bba1b2f436cbb91ef2567abca677337cfc786c86e107d25b7072feef0c
+#5 resolve docker.io/library/ubuntu:24.04@sha256:186072bba1b2f436cbb91ef2567abca677337cfc786c86e107d25b7072feef0c 0.0s done
+#5 DONE 0.0s
+
+#6 [builder 2/6] RUN apt-get update && apt-get install -y --no-install-recommends     build-essential cmake git ca-certificates     libvulkan-dev vulkan-tools glslang-tools glslc     && rm -rf /var/lib/apt/lists/*
+#6 CACHED
+
+#7 [builder 3/6] RUN git clone --depth 1 https://github.com/ggml-org/llama.cpp.git /build/llama.cpp
+#7 CACHED
+
+#8 [builder 4/6] WORKDIR /build/llama.cpp
+#8 CACHED
+
+#9 [stage-1 2/8] RUN apt-get update && apt-get install -y --no-install-recommends     ca-certificates wget libgomp1     libvulkan1 mesa-vulkan-drivers vulkan-tools     && rm -rf /var/lib/apt/lists/*
+#9 CACHED
+
+#10 [builder 5/6] RUN cmake -B build     -DGGML_VULKAN=ON     -DBUILD_SHARED_LIBS=ON     -DCMAKE_BUILD_TYPE=Release     -DLLAMA_BUILD_EXAMPLES=OFF     -DLLAMA_BUILD_TESTS=OFF     -DLLAMA_BUILD_SERVER=OFF     && cmake --build build --config Release -j$(nproc)
+#10 CACHED
+
+#11 [internal] load build context
+#11 ...
+
+#12 [builder 6/6] RUN mkdir -p /staging &&     find /build/llama.cpp/build -name "*.so" -exec cp {} /staging/ ; &&     ls -la /staging/
+#12 0.247 total 49672
+#12 0.247 drwxr-xr-x 2 root root     4096 Mar 20 04:16 .
+#12 0.247 drwxr-xr-x 1 root root     4096 Mar 20 04:16 ..
+#12 0.247 -rwxr-xr-x 1 root root   754688 Mar 20 04:16 libggml-base.so
+#12 0.247 -rwxr-xr-x 1 root root  1110136 Mar 20 04:16 libggml-cpu.so
+#12 0.247 -rwxr-xr-x 1 root root 44295416 Mar 20 04:16 libggml-vulkan.so
+#12 0.247 -rwxr-xr-x 1 root root    56016 Mar 20 04:16 libggml.so
+#12 0.247 -rwxr-xr-x 1 root root  3617584 Mar 20 04:16 libllama.so
+#12 0.247 -rwxr-xr-x 1 root root  1005016 Mar 20 04:16 libmtmd.so
+#12 DONE 0.6s
+
+#11 [internal] load build context
+#11 transferring context: 13.14MB 1.1s done
+#11 DONE 1.2s
+
+#13 [stage-1 3/8] COPY --from=builder /staging/ /app/lib/linux_amd64/
+#13 DONE 0.4s
+
+#14 [stage-1 4/8] COPY torch_linux_amd64 /usr/local/bin/torch
+#14 DONE 0.3s
+
+#15 [stage-1 5/8] RUN chmod +x /usr/local/bin/torch
+#15 DONE 0.3s
+
+#16 [stage-1 6/8] RUN cd /app/lib/linux_amd64 &&     for f in *.so; do ln -sf "$f" "${f}.0" 2>/dev/null; done &&     echo "/app/lib/linux_amd64" > /etc/ld.so.conf.d/torch.conf &&     ldconfig
+#16 DONE -0.4s
+
+#17 [stage-1 7/8] WORKDIR /app
+#17 DONE -0.9s
+
+#18 [stage-1 8/8] RUN mkdir -p /models
+#18 DONE 0.3s
+
+#19 exporting to image
+#19 exporting layers
+#19 exporting layers 6.4s done
+#19 exporting manifest sha256:85088963722298a9d768f182cce4fd46ffa7bcf73c9cf1517f83f37d0dd18e82 0.0s done
+#19 exporting config sha256:78b40e6e675a735d39e00a6b06b86eebf5ca92f296a2099754ae609d0e2ea5d2 0.0s done
+#19 exporting attestation manifest sha256:3677ba49dbbace9a7199ca52f41511480cf7b4cd2648f184ad062e79926df149 0.0s done
+#19 exporting manifest list sha256:0ddcd236c2772fb589de623ca4f2f67302edb1e1576e432d2784fc1ac0b479db 0.0s done
+#19 naming to docker.io/library/itaktorch:latest
+#19 naming to docker.io/library/itaktorch:latest done
+#19 unpacking to docker.io/library/itaktorch:latest
+#19 unpacking to docker.io/library/itaktorch:latest 1.2s done
+#19 DONE 7.7s
+Docker Image Built Successfully.
+
+--- Step 3: Starting Vulkan Docker Container ---
+itaktorch-live
+itaktorch-live
+10e77bfe41c70bbecd86d14beacf0a6b5ef7c780265aae679cbff7630bb55e31
+Vulkan Container Started.
+
+=============================================
+All done! You can close this window now.
+=============================================

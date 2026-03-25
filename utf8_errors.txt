@@ -1,0 +1,32 @@
+﻿go : # github.com/Da
+vid2024patton/iTaKTo
+rch/pkg/torch
+At line:1 char:1
++ go build -o 
+itaktorch.exe 
+./cmd/torch 2>&1 | 
+Out-File -Encoding 
+UTF8  ...
++ ~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~
+~~~~
+    + CategoryInfo  
+            : 
+NotSpecified    : 
+(# github.com/Da.   
+ 
+..Torch/pkg/torch:S 
+   tring) [], 
+RemoteEx    ception
+    + 
+FullyQualifiedErr   
+ orId : 
+NativeComman    
+dError
+ 
+pkg\torch\native_ada
+pter.go:91:3: 
+unknown field 
+TotalRequests in 
+struct literal of 
+type EngineStats

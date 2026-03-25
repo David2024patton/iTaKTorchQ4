@@ -185,3 +185,71 @@ func (it *BatchIterator) Reset() {
 func (it *BatchIterator) NumBatches() int {
 	return (len(it.indices) + it.batchSize - 1) / it.batchSize
 }
+
+// ---------- Chat JSONL Loader ----------
+
+// LoadChatJSONL loads a JSONL file containing chat conversations in the format
+// used by the orchestrator training data generator:
+//
+//	{"messages": [
+//	  {"role": "system", "content": "..."},
+//	  {"role": "user", "content": "..."},
+//	  {"role": "assistant", "content": "..."}
+//	]}
+//
+// Returns SFTExamples that the SFTTrainer can format and train on.
+func LoadChatJSONL(path string) ([]SFTExample, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("open %s: %w", path, err)
+	}
+	defer f.Close()
+
+	var examples []SFTExample
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 1024*1024), 1024*1024) // 1MB per line
+
+	lineNum := 0
+	for scanner.Scan() {
+		lineNum++
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+
+		// Parse the outer structure.
+		var entry struct {
+			Messages []struct {
+				Role    string `json:"role"`
+				Content string `json:"content"`
+			} `json:"messages"`
+		}
+		if err := json.Unmarshal(line, &entry); err != nil {
+			fmt.Printf("[Data] Skipping malformed line %d: %v\n", lineNum, err)
+			continue
+		}
+
+		if len(entry.Messages) == 0 {
+			continue
+		}
+
+		// Convert to SFTExample.
+		example := SFTExample{
+			Messages: make([]SFTMessage, len(entry.Messages)),
+		}
+		for i, msg := range entry.Messages {
+			example.Messages[i] = SFTMessage{
+				Role:    msg.Role,
+				Content: msg.Content,
+			}
+		}
+		examples = append(examples, example)
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("scanner error: %w", err)
+	}
+
+	fmt.Printf("[Data] Loaded %d chat examples from %s\n", len(examples), path)
+	return examples, nil
+}

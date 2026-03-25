@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/David2024patton/iTaKTorch/pkg/torch/native"
 )
 
 // ModelRegistry manages multiple loaded Engine instances with LRU eviction.
@@ -23,6 +25,7 @@ type ModelRegistry struct {
 	loadedAt    map[string]time.Time // name -> load time
 	maxModels   int                  // max concurrent models (0 = unlimited)
 	modelsDir   string               // directory containing .gguf files
+	watchedDirs []string             // extra directories from config scan
 	defaultOpts EngineOpts           // shared engine options for loading
 	cancel      context.CancelFunc   // cancels the TTL monitor goroutine
 
@@ -69,6 +72,7 @@ func NewModelRegistry(modelsDir string, maxModels int, opts EngineOpts) (*ModelR
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+
 	registry := &ModelRegistry{
 		engines:     make(map[string]Engine),
 		lru:         make([]string, 0),
@@ -83,6 +87,42 @@ func NewModelRegistry(modelsDir string, maxModels int, opts EngineOpts) (*ModelR
 	go registry.ttlMonitor(ctx)
 
 	return registry, nil
+}
+
+// LoadWatchedDirs reads watched directories from the global config and adds them
+// to the registry's search paths. Call this after NewModelRegistry() in production
+// to include models found by `torch scan`.
+func (r *ModelRegistry) LoadWatchedDirs() {
+	cfg, err := LoadConfig()
+	if err != nil {
+		return
+	}
+	for _, wd := range cfg.WatchedDirs {
+		if wd != r.modelsDir {
+			r.watchedDirs = append(r.watchedDirs, wd)
+		}
+	}
+}
+
+// CanServe returns true if the named model can actually be loaded for inference.
+// A model is servable if it's already loaded in memory OR resolves to a .gguf file
+// on disk. Models that are listed but can't be served (SafeTensors dirs, Ollama
+// blobs, vocab files) return false so they can be proxied to upstream Ollama.
+func (r *ModelRegistry) CanServe(name string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	// Already loaded = definitely servable.
+	if _, ok := r.engines[name]; ok {
+		return true
+	}
+
+	// Try to resolve to a GGUF path.
+	path, err := r.resolveModel(name)
+	if err != nil {
+		return false
+	}
+	return strings.HasSuffix(strings.ToLower(path), ".gguf")
 }
 
 // GetOrLoad returns an engine for the named model.
@@ -124,12 +164,36 @@ func (r *ModelRegistry) GetOrLoad(name string) (Engine, error) {
 		}
 	}
 
-	// Load the model.
-	fmt.Printf("[iTaK Torch] Registry: loading model %q from %s\n", name, modelPath)
+	// Use heuristic to determine engine: File < 1.0 GB -> GOTensor Native, otherwise FFI.
+	var engine Engine
+
 	loadStart := time.Now()
-	engine, err := NewTorchEngine(modelPath, r.defaultOpts)
-	if err != nil {
-		return nil, fmt.Errorf("load model %q: %w", name, err)
+	info, statErr := os.Stat(modelPath)
+	useNative := false
+	if statErr == nil && info.Size() < 1*1024*1024*1024 {
+		useNative = true
+	}
+
+	if useNative {
+		fmt.Printf("[iTaK Torch] Registry: heuristic triggered (<1GB). Loading model %q via GOTensor from %s\n", name, modelPath)
+		natEngine, err := native.NewNativeEngineFromGGUF(modelPath)
+		if err == nil {
+			natEngine.UseGPU() // Setup GPU automatically if available in pure Go engine
+			natEngine.SetLoadDuration(time.Since(loadStart))
+			engine = NewNativeAdapter(natEngine)
+		} else {
+			fmt.Printf("[iTaK Torch] Registry: GOTensor load failed, falling back to FFI: %v\n", err)
+			useNative = false // Fallback to FFI
+		}
+	}
+
+	if !useNative {
+		fmt.Printf("[iTaK Torch] Registry: loading model %q via FFI from %s\n", name, modelPath)
+		var err error
+		engine, err = NewTorchEngine(modelPath, r.defaultOpts)
+		if err != nil {
+			return nil, fmt.Errorf("load model %q: %w", name, err)
+		}
 	}
 
 	loadDuration := time.Since(loadStart)
@@ -185,6 +249,7 @@ func (r *ModelRegistry) evictLRU() error {
 
 // resolveModel finds the .gguf file for the given model name.
 // Tries: exact match, name + .gguf, and partial prefix match.
+// Searches the primary modelsDir first, then all watched directories.
 // All resolved paths are validated for security (no traversal, correct extension).
 func (r *ModelRegistry) resolveModel(name string) (string, error) {
 	// Security: reject names that contain traversal sequences.
@@ -192,69 +257,124 @@ func (r *ModelRegistry) resolveModel(name string) (string, error) {
 		return "", fmt.Errorf("model name %q contains directory traversal", name)
 	}
 
-	// Exact path match.
-	exactPath := filepath.Join(r.modelsDir, name)
-	if _, err := os.Stat(exactPath); err == nil {
-		return exactPath, nil
-	}
+	// Build list of directories to search: primary first, then watched.
+	dirs := []string{r.modelsDir}
+	dirs = append(dirs, r.watchedDirs...)
 
-	// With .gguf extension.
-	ggufPath := filepath.Join(r.modelsDir, name+".gguf")
-	if _, err := os.Stat(ggufPath); err == nil {
-		return ggufPath, nil
-	}
+	for _, dir := range dirs {
+		// Exact path match.
+		exactPath := filepath.Join(dir, name)
+		if _, err := os.Stat(exactPath); err == nil {
+			return exactPath, nil
+		}
 
-	// Scan for partial match (e.g., "qwen3-0.6b" matches "qwen3-0.6b-q4_k_m.gguf").
-	entries, err := os.ReadDir(r.modelsDir)
-	if err != nil {
-		return "", fmt.Errorf("scan models dir: %w", err)
-	}
+		// With .gguf extension.
+		ggufPath := filepath.Join(dir, name+".gguf")
+		if _, err := os.Stat(ggufPath); err == nil {
+			return ggufPath, nil
+		}
 
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".gguf") {
+		// Partial match scan.
+		entries, err := os.ReadDir(dir)
+		if err != nil {
 			continue
 		}
-		baseName := strings.TrimSuffix(entry.Name(), ".gguf")
-		if strings.Contains(baseName, name) || strings.Contains(name, baseName) {
-			return filepath.Join(r.modelsDir, entry.Name()), nil
+		for _, entry := range entries {
+			if entry.IsDir() || !strings.HasSuffix(strings.ToLower(entry.Name()), ".gguf") {
+				continue
+			}
+			baseName := entry.Name()[:len(entry.Name())-5] // strip .gguf
+			if strings.Contains(strings.ToLower(baseName), strings.ToLower(name)) ||
+				strings.Contains(strings.ToLower(name), strings.ToLower(baseName)) {
+				return filepath.Join(dir, entry.Name()), nil
+			}
 		}
 	}
 
-	// List available models in error message.
+	// Not found anywhere.
 	available := r.listAvailableNames()
 	if len(available) > 0 {
-		return "", fmt.Errorf("model %q not found in %s (available: %s)", name, r.modelsDir, strings.Join(available, ", "))
+		return "", fmt.Errorf("model %q not found (available: %s)", name, strings.Join(available, ", "))
 	}
-	return "", fmt.Errorf("model %q not found in %s (directory is empty)", name, r.modelsDir)
+	return "", fmt.Errorf("model %q not found (no models discovered)", name)
 }
 
-// ListAvailable returns all .gguf files in the models directory with file sizes.
+// ListAvailable returns all model files across the models directory and all
+// watched directories from config. Deduplicates by model name.
 func (r *ModelRegistry) ListAvailable() []ModelInfo {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	entries, err := os.ReadDir(r.modelsDir)
-	if err != nil {
-		return nil
+	seen := make(map[string]bool)
+	var models []ModelInfo
+
+	// Helper: scan one directory for .gguf and .safetensors models.
+	scanDir := func(dir string) {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return
+		}
+
+		hasSafetensors := false
+		var stSize int64
+
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			nameLower := strings.ToLower(entry.Name())
+
+			if strings.HasSuffix(nameLower, ".gguf") {
+				name := strings.TrimSuffix(entry.Name(), ".gguf")
+				// Also handle case-insensitive suffix.
+				if strings.HasSuffix(nameLower, ".gguf") && !strings.HasSuffix(entry.Name(), ".gguf") {
+					name = entry.Name()[:len(entry.Name())-5]
+				}
+				if seen[name] {
+					continue
+				}
+				seen[name] = true
+				var sizeBytes int64
+				if info, err := entry.Info(); err == nil {
+					sizeBytes = info.Size()
+				}
+				models = append(models, ModelInfo{
+					ID:        name,
+					Object:    "model",
+					OwnedBy:   "itaktorch",
+					SizeBytes: sizeBytes,
+				})
+			} else if strings.HasSuffix(nameLower, ".safetensors") {
+				hasSafetensors = true
+				if info, err := entry.Info(); err == nil {
+					stSize += info.Size()
+				}
+			}
+		}
+
+		// Register safetensors directories as HF models.
+		if hasSafetensors {
+			name := filepath.Base(dir) + " (HF)"
+			if !seen[name] {
+				seen[name] = true
+				models = append(models, ModelInfo{
+					ID:        name,
+					Object:    "model",
+					OwnedBy:   "huggingface",
+					SizeBytes: stSize,
+				})
+			}
+		}
 	}
 
-	var models []ModelInfo
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".gguf") {
-			continue
-		}
-		name := strings.TrimSuffix(entry.Name(), ".gguf")
-		var sizeBytes int64
-		if info, err := entry.Info(); err == nil {
-			sizeBytes = info.Size()
-		}
-		models = append(models, ModelInfo{
-			ID:        name,
-			Object:    "model",
-			OwnedBy:   "itaktorch",
-			SizeBytes: sizeBytes,
-		})
+	// 1. Primary models directory.
+	scanDir(r.modelsDir)
+
+	// 2. All watched directories.
+	for _, wd := range r.watchedDirs {
+		scanDir(wd)
 	}
+
 	return models
 }
 
@@ -349,20 +469,36 @@ func (r *ModelRegistry) Close() error {
 	return nil
 }
 
-// listAvailableNames returns a list of model names from the models directory.
+// listAvailableNames returns a list of model names from all known directories.
 func (r *ModelRegistry) listAvailableNames() []string {
-	entries, err := os.ReadDir(r.modelsDir)
-	if err != nil {
-		return nil
+	seen := make(map[string]bool)
+	var names []string
+
+	scanDir := func(dir string) {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return
+		}
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			nameLower := strings.ToLower(entry.Name())
+			if strings.HasSuffix(nameLower, ".gguf") {
+				name := entry.Name()[:len(entry.Name())-5]
+				if !seen[name] {
+					seen[name] = true
+					names = append(names, name)
+				}
+			}
+		}
 	}
 
-	var names []string
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".gguf") {
-			continue
-		}
-		names = append(names, strings.TrimSuffix(entry.Name(), ".gguf"))
+	scanDir(r.modelsDir)
+	for _, wd := range r.watchedDirs {
+		scanDir(wd)
 	}
+
 	return names
 }
 

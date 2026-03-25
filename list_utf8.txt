@@ -1,0 +1,95 @@
+﻿
+[38;5;202m  ========================================[0m
+[1;38;5;202m       iTaK Torch - Local LLM Engine[0m
+[2;38;5;202m     Intelligent Task Automation Kernel[0m
+[38;5;202m  ========================================[0m
+
+[1mCached models[0m (C:\Users\David\.torch\models):
+
+  [36mNAME                                                     SIZE        LAST USED   [0m
+  [36m-------------------------------------------------------  ----------  ------------[0m
+  [33m01 (HF)                                                   40688 MB  2025-08-04[0m
+  Cosmos-Reason2-2B-BF16-split-00001-of-00002                3809 MB  2026-01-14
+  Cosmos-Reason2-2B-BF16-split-00002-of-00002                  72 MB  2026-01-14
+  DeepSeek-R1.BF16-00001-of-00030                           41847 MB  2025-01-29
+  DeepSeek-R1.BF16-00007-of-00030                             859 MB  2025-01-29
+  DeepSeek-R1.BF16-00008-of-00030                             969 MB  2025-01-29
+  Gemma-3n-4b-Vision-Finetuned.Q6_K                          5439 MB  2025-08-04
+  LFM2-1.2B-Q8_0                                             1188 MB  2026-01-14
+  Magistral-Small-2509-Q4_K_M                               13669 MB  2026-01-14
+  Meta-Llama-3.1-8B-Instruct-Q4_K_M                          4692 MB  2026-03-10
+  Ministral-3-3B-Instruct-2512-Q4_K_M                        2047 MB  2026-01-14
+  NVIDIA-Nemotron-3-Nano-30B-A3B-Q3_K_L                     19788 MB  2026-01-14
+  Phi-4-mini-reasoning-Q4_K_M                                2376 MB  2026-01-14
+  Qwen2.5-0.5B-Instruct-Q8_0                                  506 MB  2026-01-11
+  Qwen2.5-Coder-1.5B-Instruct-Q8_0                           1570 MB  2026-01-11
+  Qwen2.5-Coder-7B-Instruct-Q4_K_M                           4466 MB  2026-01-11
+  Qwen2.5-Omni-3B-UD-Q6_K_XL                                 2955 MB  2025-08-04
+  Qwen2.5-VL-7B-Instruct-Q4_K_M                              4466 MB  2026-01-11
+  Qwen3-0.6B-Q8_0                                             609 MB  2026-03-16
+  Qwen3-4B-Thinking-2507-Q4_K_M                              2381 MB  2026-01-14
+  Qwen3-Code-Reasoning-4B.Q3_K_L                             2136 MB  2026-01-14
+  Qwen3-VL-4B-n8n-Business-Architect                         7678 MB  2026-01-05
+  Seed-OSS-36B-Instruct-Q4_K_M                              20754 MB  2026-01-14
+  [33mStable-diffusion (HF)                                      4067 MB  2025-09-13[0m
+  deepseek-coder-1.3b-instruct.Q8_0                          1365 MB  2025-01-29
+  flux1-dev-Q4_0                                             6476 MB  2025-08-15
+  flux1-schnell-Q4_K_S                                       6469 MB  2025-08-15
+  fuseo1-deepseekr1-qwen2.5-coder-7b-preview-q5_k_s          5068 MB  2026-01-11
+  ggml-org_Qwen2.5-Coder-1.5B-Q8_0-GGUF_qwen2.5-coder-...    1570 MB  2025-08-04
+  ggml-vocab-aquila                                             4 MB  2026-03-17
+  ggml-vocab-baichuan                                           1 MB  2026-03-17
+  ggml-vocab-bert-bge                                           0 MB  2026-03-17
+  ggml-vocab-command-r                                         10 MB  2026-03-17
+  ggml-vocab-deepseek-coder                                     1 MB  2026-03-17
+  ggml-vocab-deepseek-llm                                       3 MB  2026-03-17
+  ggml-vocab-falcon                                             2 MB  2026-03-17
+  ggml-vocab-gpt-2                                              1 MB  2026-03-17
+  ggml-vocab-gpt-neox                                           1 MB  2026-03-17
+  ggml-vocab-llama-bpe                                          7 MB  2026-03-17
+  ggml-vocab-llama-spm                                          0 MB  2026-03-17
+  ggml-vocab-mpt                                                1 MB  2026-03-17
+  ggml-vocab-nomic-bert-moe                                     6 MB  2026-03-17
+  ggml-vocab-phi-3                                              0 MB  2026-03-17
+  ggml-vocab-qwen2                                              5 MB  2026-03-17
+  ggml-vocab-refact                                             1 MB  2026-03-17
+  ggml-vocab-starcoder                                          1 MB  2026-03-17
+  granite-4.0-h-tiny-Q4_K_M                                  4034 MB  2026-01-14
+  hf_ggml-org_embeddinggemma-300M-Q8_0                        313 MB  2026-02-04
+  media-file-recognizer-tiny-llama-1.1b-v2-iq4_nl-imat        608 MB  2026-01-14
+  mmproj-Cosmos-Reason2-2B-BF16                               784 MB  2026-01-14
+  mmproj-Magistral-Small-2509-F16                             837 MB  2026-01-14
+  mmproj-Ministral-3-3B-Instruct-2512-F16                     801 MB  2026-01-14
+  mmproj-model-f16                                           1291 MB  2026-01-11
+  model                                                       468 MB  2026-03-06
+  moondream2-mmproj-f16                                       867 MB  2026-03-05
+  moondream2-text-model-f16                                  2707 MB  2026-03-05
+  nomic-embed-text-v2-moe                                     488 MB  2026-03-04
+  nomic-embed-text-v2-moe.Q8_0                                488 MB  2026-01-14
+  ollama-all-minilm-latest                                     43 MB  2026-03-16
+  ollama-nemotron-3-nano-30b-a3b-q4_K_M                     23147 MB  2026-03-09
+  ollama-qwen3.5-0.8b                                         988 MB  2026-03-16
+  ollama-qwen3.5-2b                                          2614 MB  2026-03-16
+  ollama-qwen3.5-35b                                        22763 MB  2026-03-16
+  ollama-qwen3.5-4b                                          3232 MB  2026-03-16
+  openclaw-gpt20b                                           13154 MB  2026-02-02
+  openreasoning-nemotron-1.5B-Q4_K_M                          940 MB  2026-01-14
+  openreasoning-nemotron-1.5B-Q5_K_M                         1072 MB  2026-01-14
+  qwen2.5-0.5b                                                379 MB  2026-03-16
+  qwen2.5-0.5b-instruct-q4_k_m                                468 MB  2026-03-06
+  qwen2.5-1.5b-instruct-q4_k_m                               1065 MB  2026-03-06
+  qwen2.5-coder-1.5b-q8_0                                    1570 MB  2026-01-11
+  qwen2.5-coder-14b-instruct-q4_k_m                          8571 MB  2026-01-11
+  qwen2.5-coder-3b-instruct-q5_k_m                           2121 MB  2026-01-11
+  qwen2.5-coder-3b-instruct-q5_k_s                           2069 MB  2026-01-11
+  qwen2.5-coder-3b-instruct-ts-q5_k_m                        2121 MB  2026-01-11
+  qwen2.5-coder-3b-q4_k_m                                    1840 MB  2026-03-04
+  qwen2.5-coder-7b-instruct-q8_0                             7723 MB  2026-01-11
+  qwen3-0.6b-q4_k_m                                           378 MB  2026-03-04
+  qwen3-1.7b-q4_k_m                                          1056 MB  2026-03-04
+  qwen3-4b-q4_k_m                                            2381 MB  2026-03-04
+  qwen3-8b                                                   4983 MB  2026-02-19
+  qwen3-vl-8b                                                5855 MB  2026-02-02
+  tinyllama                                                   636 MB  2025-08-04
+  unsloth.Q4_K_M                                             1840 MB  2026-01-11
+

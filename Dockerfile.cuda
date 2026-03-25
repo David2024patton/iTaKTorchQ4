@@ -1,0 +1,49 @@
+# iTaK Torch - CUDA GPU-accelerated Docker image
+# Uses pre-built CUDA shared libs from lib/linux_amd64/
+#
+# Build:  docker build -t itaktorch-cuda -f Dockerfile.cuda .
+# Run:    docker run --gpus all -p 39272:39272 -v /path/to/models:/models itaktorch-cuda
+
+FROM nvidia/cuda:12.8.0-runtime-ubuntu24.04
+
+# Runtime deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates wget libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# NVIDIA GPU support
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+# Copy pre-built CUDA llama.cpp shared libs
+COPY lib/linux_amd64/libllama.so /app/lib/linux_amd64/
+COPY lib/linux_amd64/libggml.so /app/lib/linux_amd64/
+COPY lib/linux_amd64/libggml-base.so /app/lib/linux_amd64/
+COPY lib/linux_amd64/libggml-cpu.so /app/lib/linux_amd64/
+COPY lib/linux_amd64/libggml-cuda.so /app/lib/linux_amd64/
+
+# Copy pre-built Torch binary
+COPY torch_linux_amd64 /usr/local/bin/torch
+RUN chmod +x /usr/local/bin/torch
+
+# Create symlinks and register with ldconfig
+RUN cd /app/lib/linux_amd64 && \
+    for f in *.so; do ln -sf "$f" "${f}.0" 2>/dev/null; done && \
+    echo "/app/lib/linux_amd64" > /etc/ld.so.conf.d/torch.conf && \
+    ldconfig
+
+# Set lib path
+ENV ITAK_TORCH_LIB=/app/lib/linux_amd64
+ENV LD_LIBRARY_PATH=/app/lib/linux_amd64
+
+WORKDIR /app
+RUN mkdir -p /models
+VOLUME /models
+
+EXPOSE 39272
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
+    CMD wget -q -O /dev/null http://localhost:39272/health || exit 1
+
+ENTRYPOINT ["torch"]
+CMD ["serve", "--port", "39272", "--models-dir", "/models"]

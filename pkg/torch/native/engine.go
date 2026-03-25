@@ -483,6 +483,12 @@ func (e *NativeEngine) printBenchmark(promptToks, genToks int, promptDur, genDur
 
 // ---------- Forward Pass ----------
 
+// Forward runs one forward pass through the transformer (public API for training).
+// Takes token IDs, returns logits over the vocabulary.
+func (e *NativeEngine) Forward(tokenIDs []int) []float32 {
+	return e.forward(tokenIDs)
+}
+
 // forward runs one forward pass through the transformer.
 // Takes token IDs, returns logits over the vocabulary.
 func (e *NativeEngine) forward(tokenIDs []int) []float32 {

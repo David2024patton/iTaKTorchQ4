@@ -9,7 +9,11 @@
 // and a 32x32 tile of float32 (4KB) fits comfortably.
 package native
 
-import "fmt"
+import (
+	"fmt"
+	"runtime"
+	"sync"
+)
 
 // MatMul multiplies two 2D tensors: C = A * B.
 //
@@ -49,33 +53,62 @@ func matMulBlocked(a, b []float32, m, k, n int) *Tensor {
 	result := NewTensor([]int{m, n})
 	c := result.Data
 
-	for i0 := 0; i0 < m; i0 += tileSize {
-		iEnd := i0 + tileSize
-		if iEnd > m {
-			iEnd = m
+	numWorkers := runtime.NumCPU()
+	if numWorkers < 1 {
+		numWorkers = 1
+	}
+
+	rowsPerWorker := ((m + numWorkers - 1) / numWorkers)
+	rowsPerWorker = ((rowsPerWorker + tileSize - 1) / tileSize) * tileSize
+	if rowsPerWorker == 0 {
+		rowsPerWorker = tileSize
+	}
+
+	var wg sync.WaitGroup
+
+	for w := 0; w < numWorkers; w++ {
+		startRow := w * rowsPerWorker
+		if startRow >= m {
+			break
 		}
-		for l0 := 0; l0 < k; l0 += tileSize {
-			lEnd := l0 + tileSize
-			if lEnd > k {
-				lEnd = k
-			}
-			for j0 := 0; j0 < n; j0 += tileSize {
-				jEnd := j0 + tileSize
-				if jEnd > n {
-					jEnd = n
+		endRow := startRow + rowsPerWorker
+		if endRow > m {
+			endRow = m
+		}
+
+		wg.Add(1)
+		go func(rStart, rEnd int) {
+			defer wg.Done()
+			for i0 := rStart; i0 < rEnd; i0 += tileSize {
+				iEnd := i0 + tileSize
+				if iEnd > rEnd {
+					iEnd = rEnd
 				}
-				// Inner tile: all accesses are cache-friendly.
-				for i := i0; i < iEnd; i++ {
-					for l := l0; l < lEnd; l++ {
-						aVal := a[i*k+l]
-						for j := j0; j < jEnd; j++ {
-							c[i*n+j] += aVal * b[l*n+j]
+				for l0 := 0; l0 < k; l0 += tileSize {
+					lEnd := l0 + tileSize
+					if lEnd > k {
+						lEnd = k
+					}
+					for j0 := 0; j0 < n; j0 += tileSize {
+						jEnd := j0 + tileSize
+						if jEnd > n {
+							jEnd = n
+						}
+						// Inner tile: all accesses are cache-friendly.
+						for i := i0; i < iEnd; i++ {
+							for l := l0; l < lEnd; l++ {
+								aVal := a[i*k+l]
+								for j := j0; j < jEnd; j++ {
+									c[i*n+j] += aVal * b[l*n+j]
+								}
+							}
 						}
 					}
 				}
 			}
-		}
+		}(startRow, endRow)
 	}
+	wg.Wait()
 
 	return result
 }
@@ -93,13 +126,38 @@ func MatVecMul(a *Tensor, v *Tensor) *Tensor {
 	}
 
 	result := NewTensor([]int{m})
-	for i := 0; i < m; i++ {
-		var sum float32
-		rowOff := i * k
-		for j := 0; j < k; j++ {
-			sum += a.Data[rowOff+j] * v.Data[j]
-		}
-		result.Data[i] = sum
+
+	numWorkers := runtime.NumCPU()
+	if numWorkers < 1 {
+		numWorkers = 1
 	}
+
+	rowsPerWorker := (m + numWorkers - 1) / numWorkers
+	if rowsPerWorker == 0 {
+		rowsPerWorker = 1
+	}
+
+	var wg sync.WaitGroup
+	for w := 0; w < numWorkers; w++ {
+		startRow := w * rowsPerWorker
+		if startRow >= m {
+			break
+		}
+		endRow := startRow + rowsPerWorker
+		if endRow > m {
+			endRow = m
+		}
+
+		wg.Add(1)
+		go func(rStart, rEnd int) {
+			defer wg.Done()
+			for i := rStart; i < rEnd; i++ {
+				rowOff := i * k
+				result.Data[i] = Dot(a.Data[rowOff:rowOff+k], v.Data)
+			}
+		}(startRow, endRow)
+	}
+	wg.Wait()
+
 	return result
 }

@@ -8,7 +8,8 @@ import (
 )
 
 type Config struct {
-	WatchedDirs []string `json:"watched_dirs"`
+	WatchedDirs  []string       `json:"watched_dirs"`
+	DirModCounts map[string]int `json:"dir_mod_counts,omitempty"` // last-known model count per directory
 }
 
 // ConfigPath returns the path to the global config file (~/.torch/config.json).
@@ -45,9 +46,12 @@ func LoadConfig() (*Config, error) {
 		return nil, fmt.Errorf("parse config json: %w", err)
 	}
 
-	// Ensure slice exists
+	// Ensure slices/maps exist
 	if cfg.WatchedDirs == nil {
 		cfg.WatchedDirs = []string{}
+	}
+	if cfg.DirModCounts == nil {
+		cfg.DirModCounts = make(map[string]int)
 	}
 
 	return &cfg, nil

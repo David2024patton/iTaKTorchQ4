@@ -1,0 +1,101 @@
+[iTaK Torch] Multi-model mode: dir=E:\.agent\iTaK max_loaded=1
+[iTaK Torch] Ollama-compatible API enabled (/api/generate, /api/chat, /api/tags)
+[iTaK Torch] Scheduler started (queue capacity: 64, priority lanes: high+normal)
+[iTaK Torch] Server starting on http://localhost:41934
+[iTaK Torch] Model: registry-placeholder
+[iTaK Torch] Endpoints:
+  POST /v1/chat/completions
+  GET  /v1/models
+  GET  /health
+[iTaK Torch] Registry: loading model "qwen3-8b" from E:\.agent\iTaK Eco\Torch\models\qwen3-8b.gguf
+[iTaK Torch] AutoConfig: backend=vulkan gpu_layers=999 threads=8 device= fits_gpu=true | model=4.9GB | vram_needed~6477MiB | cpu=16P/32L cores | gpu[0]=nvidia(16376MiB) | gpu[1]=intel(2047MiB) | NVIDIA 16376MiB >= needed 6477MiB -> full GPU offload (Vulkan preferred, 8% faster than CUDA on b8398)
+[iTaK Torch] Using libs from: E:\.agent\iTaK Eco\Torch\lib\windows_amd64_cuda
+[iTaK Torch] ============ STARTUP DIAGNOSTICS ============
+[iTaK Torch] [OK  ] [dll    ] Lib directory: E:\.agent\iTaK Eco\Torch\lib\windows_amd64_cuda
+[iTaK Torch] [OK  ] [dll    ] GPU backends available: cuda
+[iTaK Torch] [INFO] [backend] Selected backend: vulkan
+[iTaK Torch] [INFO] [backend] GPU layers: 0 (fits_gpu=true)
+[iTaK Torch] [WARN] [backend] Lib path contains 'cuda' but AutoConfig chose 'vulkan' - CUDA DLLs loaded but not used for routing. Use --backend=cuda to force CUDA.
+[iTaK Torch] [WARN] [gpu    ] GPU layers = 0 - model will run on CPU only
+[iTaK Torch] [OK  ] [gpu    ] GPU detected: NVIDIA GeForce RTX 4070 Ti SUPER (16376 MiB VRAM)
+[iTaK Torch] [OK  ] [perf   ] Flash attention: enabled
+[iTaK Torch] [OK  ] [perf   ] Prefix cache: 16 entries
+[iTaK Torch] [OK  ] [perf   ] Batch size: 2048
+[iTaK Torch] [INFO] [perf   ] KV cache: f16 (default, higher quality but 2x VRAM)
+[iTaK Torch] [INFO] [perf   ] Threads: 8
+[iTaK Torch] ==========================================
+[iTaK Torch] Threads: 8 (physical=16, logical=32, hybrid=false)
+[iTaK Torch] No .sha256 sidecar found for model (skipping integrity check)
+[iTaK Torch] Context auto-sized: 8192 (model trained on 40960)
+[iTaK Torch] Pre-faulted 4983 MB in 340ms (optimized)
+[iTaK Torch] KV cache: f16 (full precision)
+[iTaK Torch] Chat template: chatml (gguf)
+[iTaK Torch] Model loaded in 2m3.678s
+[iTaK Torch] [sys] heap: 2.9MB | sys: 19.9MB | goroutines: 9 | gc: 845
+[iTaK Torch] [sys] heap: 3.5MB | sys: 19.9MB | goroutines: 13 | gc: 849
+[iTaK Torch] System: CUDA : ARCHS = 500,610,700,750,800,860,890 | USE_GRAPHS = 1 | PEER_MAX_BATCH_SIZE = 128 | CPU : SSE3 = 1 | SSSE3 = 1 | AVX = 1 | AVX_VNNI = 1 | AVX2 = 1 | F16C = 1 | FMA = 1 | BMI2 = 1 | LLAMAFILE = 1 | OPENMP = 1 | REPACK = 1 | 
+[iTaK Torch] Optimizations: mmap=true mlock=false gpu_offload=true flash_attn=true threads=8 batch=2048
+[iTaK Torch] Model warmup complete
+[iTaK Torch] Go-native tokenizer loaded: 151936 tokens, 151387 merges
+[iTaK Torch] Registry: model "qwen3-8b" loaded in 2m11.168s
+[iTaK Torch] Scheduler started (queue capacity: 64, priority lanes: high+normal)
+[iTaK Torch] Scheduler stopped (processed: 1, dropped: 0)
+[iTaK Torch] Registry: TTL expired for "qwen3-8b", unloading from VRAM
+[iTaK Torch] Registry: reloading model "qwen3-8b" into VRAM (TTL wake up)
+[iTaK Torch] AutoConfig: backend=vulkan gpu_layers=999 threads=8 device= fits_gpu=true | model=4.9GB | vram_needed~6477MiB | cpu=16P/32L cores | gpu[0]=nvidia(16376MiB) | gpu[1]=intel(2047MiB) | NVIDIA 16376MiB >= needed 6477MiB -> full GPU offload (Vulkan preferred, 8% faster than CUDA on b8398)
+[iTaK Torch] Using libs from: E:\.agent\iTaK Eco\Torch\lib\windows_amd64_cuda
+[iTaK Torch] ============ STARTUP DIAGNOSTICS ============
+[iTaK Torch] [OK  ] [dll    ] Lib directory: E:\.agent\iTaK Eco\Torch\lib\windows_amd64_cuda
+[iTaK Torch] [OK  ] [dll    ] GPU backends available: cuda
+[iTaK Torch] [INFO] [backend] Selected backend: vulkan
+[iTaK Torch] [INFO] [backend] GPU layers: 0 (fits_gpu=true)
+[iTaK Torch] [WARN] [backend] Lib path contains 'cuda' but AutoConfig chose 'vulkan' - CUDA DLLs loaded but not used for routing. Use --backend=cuda to force CUDA.
+[iTaK Torch] [WARN] [gpu    ] GPU layers = 0 - model will run on CPU only
+[iTaK Torch] [OK  ] [gpu    ] GPU detected: NVIDIA GeForce RTX 4070 Ti SUPER (16376 MiB VRAM)
+[iTaK Torch] [OK  ] [perf   ] Flash attention: enabled
+[iTaK Torch] [OK  ] [perf   ] Prefix cache: 16 entries
+[iTaK Torch] [OK  ] [perf   ] Batch size: 2048
+[iTaK Torch] [INFO] [perf   ] KV cache: f16 (default, higher quality but 2x VRAM)
+[iTaK Torch] [INFO] [perf   ] Threads: 8
+[iTaK Torch] ==========================================
+[iTaK Torch] Threads: 8 (physical=16, logical=32, hybrid=false)
+[iTaK Torch] No .sha256 sidecar found for model (skipping integrity check)
+[iTaK Torch] Pre-faulted 4983 MB in 366ms (optimized)
+[iTaK Torch] KV cache: f16 (full precision)
+[iTaK Torch] Chat template: chatml (gguf)
+[iTaK Torch] Model loaded in 1.122s
+[iTaK Torch] [sys] heap: 24.6MB | sys: 53.2MB | goroutines: 9 | gc: 857
+[iTaK Torch] [sys] heap: 33.9MB | sys: 53.5MB | goroutines: 9 | gc: 857
+[iTaK Torch] System: CUDA : ARCHS = 500,610,700,750,800,860,890 | USE_GRAPHS = 1 | PEER_MAX_BATCH_SIZE = 128 | CPU : SSE3 = 1 | SSSE3 = 1 | AVX = 1 | AVX_VNNI = 1 | AVX2 = 1 | F16C = 1 | FMA = 1 | BMI2 = 1 | LLAMAFILE = 1 | OPENMP = 1 | REPACK = 1 | 
+[iTaK Torch] Optimizations: mmap=true mlock=false gpu_offload=true flash_attn=true threads=8 batch=2048
+[iTaK Torch] Model warmup complete
+[iTaK Torch] Go-native tokenizer loaded: 151936 tokens, 151387 merges
+[iTaK Torch] Registry: model "qwen3-8b" reloaded in 6.24s
+[iTaK Torch] Scheduler started (queue capacity: 64, priority lanes: high+normal)
+[iTaK Torch] Scheduler stopped (processed: 0, dropped: 1)
+[iTaK Torch] Scheduler started (queue capacity: 64, priority lanes: high+normal)
+[iTaK Torch] Scheduler stopped (processed: 1, dropped: 0)
+[iTaK Torch] Scheduler started (queue capacity: 64, priority lanes: high+normal)
+[perf] 512 tok in 1m50.639s (4.7 tok/s) | prompt: 1.003s | gen: 1m49.636s
+[iTaK Torch] Scheduler stopped (processed: 1, dropped: 0)
+[iTaK Torch] Registry: TTL expired for "qwen3-8b", unloading from VRAM
+[iTaK Torch] Registry: evicting LRU model "qwen3-8b"
+[iTaK Torch] Registry: loading model "qwen3-vl-8b" from E:\.agent\iTaK Eco\Torch\models\qwen3-vl-8b.gguf
+[iTaK Torch] AutoConfig: backend=vulkan gpu_layers=999 threads=8 device= fits_gpu=true | model=5.7GB | vram_needed~7611MiB | cpu=16P/32L cores | gpu[0]=nvidia(16376MiB) | gpu[1]=intel(2047MiB) | NVIDIA 16376MiB >= needed 7611MiB -> full GPU offload (Vulkan preferred, 8% faster than CUDA on b8398)
+[iTaK Torch] Using libs from: E:\.agent\iTaK Eco\Torch\lib\windows_amd64_cuda
+[iTaK Torch] ============ STARTUP DIAGNOSTICS ============
+[iTaK Torch] [OK  ] [dll    ] Lib directory: E:\.agent\iTaK Eco\Torch\lib\windows_amd64_cuda
+[iTaK Torch] [OK  ] [dll    ] GPU backends available: cuda
+[iTaK Torch] [INFO] [backend] Selected backend: vulkan
+[iTaK Torch] [INFO] [backend] GPU layers: 0 (fits_gpu=true)
+[iTaK Torch] [WARN] [backend] Lib path contains 'cuda' but AutoConfig chose 'vulkan' - CUDA DLLs loaded but not used for routing. Use --backend=cuda to force CUDA.
+[iTaK Torch] [WARN] [gpu    ] GPU layers = 0 - model will run on CPU only
+[iTaK Torch] [OK  ] [gpu    ] GPU detected: NVIDIA GeForce RTX 4070 Ti SUPER (16376 MiB VRAM)
+[iTaK Torch] [OK  ] [perf   ] Flash attention: enabled
+[iTaK Torch] [OK  ] [perf   ] Prefix cache: 16 entries
+[iTaK Torch] [OK  ] [perf   ] Batch size: 2048
+[iTaK Torch] [INFO] [perf   ] KV cache: f16 (default, higher quality but 2x VRAM)
+[iTaK Torch] [INFO] [perf   ] Threads: 8
+[iTaK Torch] ==========================================
+[iTaK Torch] Threads: 8 (physical=16, logical=32, hybrid=false)
+[iTaK Torch] No .sha256 sidecar found for model (skipping integrity check)
