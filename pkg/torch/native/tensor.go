@@ -37,7 +37,9 @@ import (
 //	t.Set([]int{0, 1}, 3.14)
 //	val := t.Get([]int{0, 1})  // -> 3.14
 type Tensor struct {
-	Data    []float32 // flat backing array (row-major)
+	Type    uint32    // internal type tracking (e.g. ggmlTypeF32, ggmlTypeQ4_K)
+	Data    []float32 // flat backing array for F32 (row-major)
+	DataQ4  []byte    // flat compressed byte array for Q4_K format
 	Shape   []int     // dimensions
 	Strides []int     // elements to skip per dimension
 	pooled  bool      // if true, Data was allocated from tensor pool
@@ -57,6 +59,7 @@ func NewTensor(shape []int) *Tensor {
 	}
 
 	return &Tensor{
+		Type:    0, // ggmlTypeF32 is 0
 		Data:    make([]float32, size),
 		Shape:   shape,
 		Strides: strides,
@@ -70,7 +73,7 @@ func NewTensorFrom(shape []int, data []float32) *Tensor {
 	for i := len(shape) - 2; i >= 0; i-- {
 		strides[i] = strides[i+1] * shape[i+1]
 	}
-	return &Tensor{Data: data, Shape: shape, Strides: strides}
+	return &Tensor{Type: 0, Data: data, Shape: shape, Strides: strides}
 }
 
 // Size returns the total number of elements.
@@ -94,6 +97,34 @@ func (t *Tensor) Set(indices []int, val float32) {
 		offset += idx * t.Strides[i]
 	}
 	t.Data[offset] = val
+}
+
+// GetRowF32 extracts a single row from the tensor as an F32 slice.
+// This is critical for Token Embedding lookups where we need to decompress
+// a specific row of a Q4_K tensor on the fly WITHOUT doing a full MatMul.
+func (t *Tensor) GetRowF32(row int) []float32 {
+	width := t.Shape[len(t.Shape)-1]
+	res := make([]float32, width)
+
+	if t.Type == 0 { // ggmlTypeF32
+		copy(res, t.Data[row*width:(row+1)*width])
+		return res
+	}
+
+	if t.Type == 12 { // ggmlTypeQ4_K
+		blocksPerRow := width / 256
+		bytesPerRow := blocksPerRow * 144
+		byteOffset := row * bytesPerRow
+		
+		// Map the specific row's compressed bytes.
+		rowBytes := t.DataQ4[byteOffset : byteOffset+bytesPerRow]
+		
+		// Decompress just this row directly into the float32 array.
+		dequantQ4_K_Bytes(rowBytes, res)
+		return res
+	}
+
+	panic(fmt.Sprintf("GetRowF32: unsupported tensor type %d", t.Type))
 }
 
 // ---------- Element-wise Operations ----------

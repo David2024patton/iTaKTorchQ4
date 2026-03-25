@@ -10,7 +10,7 @@ import (
 
 func main() {
 	// Initialize registry
-	registry, err := torch.NewModelRegistry("./models", 1, torch.EngineOpts{})
+	registry, err := torch.NewModelRegistry(`e:\.agent\iTaK Eco\Torch\models`, 1, torch.EngineOpts{})
 	if err != nil {
 		log.Fatalf("Failed to initialize registry: %v", err)
 	}

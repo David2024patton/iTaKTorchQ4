@@ -500,9 +500,8 @@ func (e *NativeEngine) forward(tokenIDs []int) []float32 {
 		if tokID >= e.vocabSize {
 			tokID = 0
 		}
-		for d := 0; d < e.hiddenDim; d++ {
-			hidden.Data[i*e.hiddenDim+d] = e.embeddings.Data[tokID*e.hiddenDim+d]
-		}
+		row := e.embeddings.GetRowF32(tokID)
+		copy(hidden.Data[i*e.hiddenDim : i*e.hiddenDim+e.hiddenDim], row)
 	}
 
 	// Step 2: Pass through transformer layers.

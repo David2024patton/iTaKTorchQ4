@@ -10,7 +10,9 @@
 package native
 
 import (
+	"encoding/binary"
 	"fmt"
+	"math"
 	"runtime"
 	"sync"
 )
@@ -32,6 +34,14 @@ func MatMul(a, b *Tensor) *Tensor {
 	if k != k2 {
 		panic(fmt.Sprintf("MatMul: inner dimensions mismatch: %d vs %d", k, k2))
 	}
+
+	if b.Type == 12 { // ggmlTypeQ4_K
+		return matMulQ4(a, b, m, k, n)
+	}
+	if a.Type == 12 {
+		panic("MatMul: 'A' Tensor is Q4_K, which is unexpected for Activations.")
+	}
+
 	return matMulBlocked(a.Data, b.Data, m, k, n)
 }
 
@@ -160,4 +170,113 @@ func MatVecMul(a *Tensor, v *Tensor) *Tensor {
 	wg.Wait()
 
 	return result
+}
+
+func matMulQ4(a, b *Tensor, m, k, n int) *Tensor {
+	result := NewTensor([]int{m, n})
+	bytesPerRow := (k / 256) * 144
+
+	numWorkers := runtime.NumCPU()
+	if numWorkers < 1 {
+		numWorkers = 1
+	}
+
+	for i := 0; i < m; i++ {
+		aRow := a.Data[i*k : i*k+k]
+
+		chunk := (n + numWorkers - 1) / numWorkers
+		var wg sync.WaitGroup
+
+		for w := 0; w < numWorkers; w++ {
+			startJ := w * chunk
+			if startJ >= n {
+				break
+			}
+			endJ := startJ + chunk
+			if endJ > n {
+				endJ = n
+			}
+
+			wg.Add(1)
+			go func(sj, ej int) {
+				defer wg.Done()
+				for j := sj; j < ej; j++ {
+					offset := j * bytesPerRow
+					q4Slice := b.DataQ4[offset : offset+bytesPerRow]
+					result.Data[i*n+j] = Dot_Q4_K_Scalar(q4Slice, aRow)
+				}
+			}(startJ, endJ)
+		}
+		wg.Wait()
+	}
+	return result
+}
+
+// float16ToFloat32Inline converts a BF16/FP16 value to float32 inline for the Q4 unpacker.
+func float16ToFloat32Inline(h uint16) float32 {
+	sign := uint32(h>>15) & 1
+	exp := uint32(h>>10) & 0x1F
+	mant := uint32(h) & 0x3FF
+	if exp == 0 {
+		if mant == 0 {
+			return math.Float32frombits(sign << 31)
+		}
+		for mant&0x400 == 0 {
+			mant <<= 1
+			exp--
+		}
+		exp++
+		mant &= 0x3FF
+	} else if exp == 0x1F {
+		return math.Float32frombits((sign << 31) | 0x7F800000 | (mant << 13))
+	}
+	exp = exp + (127 - 15)
+	f32bits := (sign << 31) | (exp << 23) | (mant << 13)
+	return math.Float32frombits(f32bits)
+}
+
+func Dot_Q4_K_Scalar(q4Buf []byte, x []float32) float32 {
+	var sum float32
+	nBlocks := len(q4Buf) / 144
+
+	for b := 0; b < nBlocks; b++ {
+		offset := b * 144
+		blockBuf := q4Buf[offset : offset+144]
+
+		d := float16ToFloat32Inline(binary.LittleEndian.Uint16(blockBuf[0:2]))
+		dmin := float16ToFloat32Inline(binary.LittleEndian.Uint16(blockBuf[2:4]))
+		scalesRaw := blockBuf[4:16]
+		qs := blockBuf[16:144]
+
+		base := b * 256
+
+		for subBlock := 0; subBlock < 8; subBlock++ {
+			var sc, mn float32
+			if subBlock < 4 {
+				sc = float32(scalesRaw[subBlock]&0x3F)
+				mn = float32(scalesRaw[subBlock+4]&0x3F)
+			} else {
+				sc = float32((scalesRaw[subBlock+4]&0x0F) | ((scalesRaw[subBlock-4]>>6)<<4))
+				mn = float32((scalesRaw[subBlock+4]>>4) | ((scalesRaw[subBlock]>>6)<<4))
+			}
+
+			blockScale := d * sc
+			blockMin := dmin * mn
+
+			for j := 0; j < 32; j++ {
+				globalIdx := subBlock*32 + j
+				byteIdx := globalIdx / 2
+				var nibble uint8
+				if (globalIdx % 2) == 0 {
+					nibble = qs[byteIdx] & 0x0F
+				} else {
+					nibble = qs[byteIdx] >> 4
+				}
+
+				w := float32(nibble)*blockScale - blockMin
+				sum += w * x[base+globalIdx]
+			}
+		}
+	}
+	return sum
 }

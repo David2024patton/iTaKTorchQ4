@@ -285,6 +285,56 @@ func dequantQ4_K(r io.Reader, out []float32, n uint64) error {
 	return nil
 }
 
+// dequantQ4_K_Bytes dequantizes a raw block byte slice into a float32 array.
+// This is the memory-backed version of dequantQ4_K used for embedding lookups.
+func dequantQ4_K_Bytes(buf []byte, out []float32) {
+	const blockSize = 256
+	nBlocks := len(buf) / 144
+
+	for b := 0; b < nBlocks; b++ {
+		offset := b * 144
+		blockBuf := buf[offset : offset+144]
+
+		// Super-block scale and min (FP16).
+		d := float16ToFloat32(binary.LittleEndian.Uint16(blockBuf[0:2]))
+		dmin := float16ToFloat32(binary.LittleEndian.Uint16(blockBuf[2:4]))
+
+		// Sub-block scales and mins.
+		scalesRaw := blockBuf[4:16]
+
+		// Quantized nibbles.
+		qs := blockBuf[16:144]
+
+		base := b * blockSize
+
+		for subBlock := 0; subBlock < 8; subBlock++ {
+			var sc, mn float32
+			if subBlock < 4 {
+				sc = float32(scalesRaw[subBlock] & 0x3F)
+				mn = float32(scalesRaw[subBlock+4] & 0x3F)
+			} else {
+				sc = float32((scalesRaw[subBlock+4]&0x0F) | ((scalesRaw[subBlock-4]>>6)<<4))
+				mn = float32((scalesRaw[subBlock+4]>>4) | ((scalesRaw[subBlock]>>6)<<4))
+			}
+
+			blockScale := d * sc
+			blockMin := dmin * mn
+
+			for j := 0; j < 32; j++ {
+				globalIdx := subBlock*32 + j
+				byteIdx := globalIdx / 2
+				var nibble uint8
+				if globalIdx%2 == 0 {
+					nibble = qs[byteIdx] & 0x0F
+				} else {
+					nibble = qs[byteIdx] >> 4
+				}
+				out[base+globalIdx] = float32(nibble)*blockScale - blockMin
+			}
+		}
+	}
+}
+
 // --- Q6_K: 256 values per 210-byte block ---
 // 6-bit quantization with sub-block scales.
 

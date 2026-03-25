@@ -314,9 +314,27 @@ func (gf *GGUFFile) ReadTensor(info GGUFTensorInfo) (*Tensor, error) {
 		}
 
 	case ggmlTypeQ4_K:
-		if err := dequantQ4_K(f, data, totalElements); err != nil {
-			return nil, fmt.Errorf("dequant Q4_K: %w", err)
+		// --- Q4_K INTERCEPTION ---
+		// We completely bypass dequantQ4_K here.
+		// Instead, we read the raw compressed blocks directly into RAM.
+		bytesPerBlock := 144
+		numBlocks := totalElements / 256
+		if totalElements%256 != 0 {
+			return nil, fmt.Errorf("Q4_K total elements %d not divisible by 256", totalElements)
 		}
+		dataQ4 := make([]byte, numBlocks*uint64(bytesPerBlock))
+		if err := binary.Read(f, binary.LittleEndian, dataQ4); err != nil {
+			return nil, fmt.Errorf("read Q4_K raw bytes: %w", err)
+		}
+
+		fmt.Printf("[GOTensor-DEBUG] ⚡ Intercepted Q4_K Tensor '%s': Bypassing decompression, buffering %d bytes natively.\n", info.Name, len(dataQ4))
+		
+		// Build and return the Tensor immediately, skipping everything else!
+		shape := make([]int, len(info.Dimensions))
+		for i, d := range info.Dimensions {
+			shape[i] = int(d)
+		}
+		return &Tensor{Type: ggmlTypeQ4_K, DataQ4: dataQ4, Shape: shape, Strides: calculateStrides(shape)}, nil
 
 	case ggmlTypeQ6_K:
 		if err := dequantQ6_K(f, data, totalElements); err != nil {
@@ -333,7 +351,20 @@ func (gf *GGUFFile) ReadTensor(info GGUFTensorInfo) (*Tensor, error) {
 		shape[i] = int(d)
 	}
 
-	return &Tensor{Data: data, Shape: shape}, nil
+	return &Tensor{Type: ggmlTypeF32, Data: data, Shape: shape, Strides: calculateStrides(shape)}, nil
+}
+
+// calculateStrides computes row-major strides from a shape array.
+func calculateStrides(shape []int) []int {
+	strides := make([]int, len(shape))
+	if len(shape) == 0 {
+		return strides
+	}
+	strides[len(shape)-1] = 1
+	for i := len(shape) - 2; i >= 0; i-- {
+		strides[i] = strides[i+1] * shape[i+1]
+	}
+	return strides
 }
 
 // GetMetadataString returns a string metadata value, or empty string if not found.
