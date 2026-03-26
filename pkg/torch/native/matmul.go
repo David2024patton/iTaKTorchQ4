@@ -203,7 +203,7 @@ func matMulQ4(a, b *Tensor, m, k, n int) *Tensor {
 				for j := sj; j < ej; j++ {
 					offset := j * bytesPerRow
 					q4Slice := b.DataQ4[offset : offset+bytesPerRow]
-					result.Data[i*n+j] = Dot_Q4_K_Scalar(q4Slice, aRow)
+					result.Data[i*n+j] = Dot_Q4_K(q4Slice, aRow)
 				}
 			}(startJ, endJ)
 		}
@@ -235,9 +235,10 @@ func float16ToFloat32Inline(h uint16) float32 {
 	return math.Float32frombits(f32bits)
 }
 
-func Dot_Q4_K_Scalar(q4Buf []byte, x []float32) float32 {
+func Dot_Q4_K(q4Buf []byte, x []float32) float32 {
 	var sum float32
 	nBlocks := len(q4Buf) / 144
+	var scales, mins [8]float32
 
 	for b := 0; b < nBlocks; b++ {
 		offset := b * 144
@@ -248,8 +249,6 @@ func Dot_Q4_K_Scalar(q4Buf []byte, x []float32) float32 {
 		scalesRaw := blockBuf[4:16]
 		qs := blockBuf[16:144]
 
-		base := b * 256
-
 		for subBlock := 0; subBlock < 8; subBlock++ {
 			var sc, mn float32
 			if subBlock < 4 {
@@ -259,23 +258,14 @@ func Dot_Q4_K_Scalar(q4Buf []byte, x []float32) float32 {
 				sc = float32((scalesRaw[subBlock+4]&0x0F) | ((scalesRaw[subBlock-4]>>6)<<4))
 				mn = float32((scalesRaw[subBlock+4]>>4) | ((scalesRaw[subBlock]>>6)<<4))
 			}
+			scales[subBlock] = d * sc
+			mins[subBlock] = dmin * mn
+		}
 
-			blockScale := d * sc
-			blockMin := dmin * mn
-
-			for j := 0; j < 32; j++ {
-				globalIdx := subBlock*32 + j
-				byteIdx := globalIdx / 2
-				var nibble uint8
-				if (globalIdx % 2) == 0 {
-					nibble = qs[byteIdx] & 0x0F
-				} else {
-					nibble = qs[byteIdx] >> 4
-				}
-
-				w := float32(nibble)*blockScale - blockMin
-				sum += w * x[base+globalIdx]
-			}
+		base := b * 256
+		if base+256 <= len(x) {
+			xBlock := x[base : base+256]
+			sum += dotQ4BlockAVX2(qs, xBlock, &scales, &mins)
 		}
 	}
 	return sum

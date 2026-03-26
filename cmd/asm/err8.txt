@@ -1,0 +1,27 @@
+﻿go : # github.com/David2
+024patton/iTaKTorch/cmd/
+asm
+At line:1 char:50
++ ... \iTaK Eco\Torch-Q4
+-Engine\cmd\asm"; go 
+build . > err.txt 2>&1 
+; Get-C ...
++                       
+                  ~~~~~~
+~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo      
+        : NotSpecified  
+  : (# github.com/Da.   
+ ..aKTorch/cmd/asm:S    
+tring) [], RemoteEx    
+ception
+    + FullyQualifiedErr 
+   orId : NativeComman  
+  dError
+ 
+.\gen_q4_amd64.go:28:22:
+ undefined: 
+build.ConstBytes
+.\gen_q4_amd64.go:115:9:
+ build.Generate() (no 
+value) used as value
