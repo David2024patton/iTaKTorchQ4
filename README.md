@@ -22,15 +22,19 @@
 
 ### Installation
 
-Download the pre-compiled binary for your architecture directly from the repository:
+Download the pre-compiled binary and the required acceleration libraries for your architecture:
 
-- **Windows (x64)**: [torch-windows-amd64.exe](https://github.com/David2024patton/iTaKTorchQ4/raw/main/releases/torch-windows-amd64.exe)
+- **Windows (Vulkan)**: [torch-windows-amd64.exe](https://github.com/David2024patton/iTaKTorchQ4/raw/main/releases/torch-windows-amd64.exe)
+  - *Required Libraries (Bundled)*: [ggml-vulkan.dll](https://github.com/David2024patton/iTaKTorchQ4/raw/main/releases/ggml-vulkan.dll), [llama.dll](https://github.com/David2024patton/iTaKTorchQ4/raw/main/releases/llama.dll), [ggml.dll](https://github.com/David2024patton/iTaKTorchQ4/raw/main/releases/ggml.dll)
+
 - **Linux (x64)**: [torch-linux-amd64](https://github.com/David2024patton/iTaKTorchQ4/raw/main/releases/torch-linux-amd64)
+
 - **macOS (Intel)**: [torch-darwin-amd64](https://github.com/David2024patton/iTaKTorchQ4/raw/main/releases/torch-darwin-amd64)
+
 - **macOS (Apple Silicon)**: [torch-darwin-arm64](https://github.com/David2024patton/iTaKTorchQ4/raw/main/releases/torch-darwin-arm64)
 
-> [!NOTE]
-> For GPU acceleration, ensure the corresponding `wgpu-native` shared library (e.g., `wgpu_native.dll` or `libwgpu_native.so`) is present in your system path or the same directory as the binary.
+> [!IMPORTANT]
+> **GPU Acceleration**: To enable Vulkan-based GPU acceleration on Windows, ensure all `.dll` files from the `releases/` folder are placed in the same directory as `torch-windows-amd64.exe`. The engine will automatically detect and prioritize the Vulkan backend for optimal performance (up to 8% faster than CUDA).
 
 ## 📖 Documentation
 

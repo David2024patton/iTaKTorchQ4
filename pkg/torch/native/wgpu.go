@@ -156,10 +156,18 @@ fn main(
 func NewGPUBackend() *GPUBackend {
 	g := &GPUBackend{}
 
-	// Create instance.
-	g.instance = wgpu.CreateInstance(nil)
+	// Create instance with Vulkan priority if supported.
+	// For cross-platform stability, we request the Vulkan backend explicitly.
+	g.instance = wgpu.CreateInstance(&wgpu.InstanceDescriptor{
+		Backends: wgpu.InstanceBackendVulkan,
+	})
 	if g.instance == nil {
-		fmt.Println("[GOTensor] WebGPU: instance creation failed, falling back to CPU")
+		fmt.Println("[GOTensor] WebGPU: Vulkan instance creation failed, falling back to default backends")
+		g.instance = wgpu.CreateInstance(nil)
+	}
+
+	if g.instance == nil {
+		fmt.Println("[GOTensor] WebGPU: CRITICAL: instance creation failed, falling back to CPU")
 		return g
 	}
 
