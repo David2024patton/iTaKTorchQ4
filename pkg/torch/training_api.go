@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/David2024patton/iTaKTorch/pkg/torch/native"
+	"github.com/David2024patton/iTaKTorchQ4/pkg/torch/native"
 )
 
 // TrainingManager handles training job lifecycle.

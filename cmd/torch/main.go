@@ -18,8 +18,8 @@ import (
 
 	_ "net/http/pprof" // Registers /debug/pprof/* handlers for live profiling.
 
-	"github.com/David2024patton/iTaKTorch/pkg/torch"
-	"github.com/David2024patton/iTaKTorch/pkg/torch/native"
+	"github.com/David2024patton/iTaKTorchQ4/pkg/torch"
+	"github.com/David2024patton/iTaKTorchQ4/pkg/torch/native"
 )
 
 const defaultPort = 41934

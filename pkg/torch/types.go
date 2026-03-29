@@ -106,6 +106,16 @@ type ModelEntry struct {
 	LastUsed time.Time `json:"last_used"`
 }
 
+// SpeechRequest is the incoming request body for /v1/audio/speech.
+type SpeechRequest struct {
+	Model          string  `json:"model"`
+	Input          string  `json:"input"`
+	Voice          string  `json:"voice"`
+	ResponseFormat string  `json:"response_format,omitempty"`
+	Speed          float64 `json:"speed,omitempty"`
+	Arch           string  `json:"arch,omitempty"`
+}
+
 // ---------- OpenAI-Compatible API Types ----------
 
 // ChatRequest is the incoming request body for /v1/chat/completions.

@@ -26,7 +26,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/David2024patton/iTaKTorch/pkg/torch/llama"
+	"github.com/David2024patton/iTaKTorchQ4/pkg/torch/llama"
 )
 
 // MultiGPUConfig holds the multi-GPU splitting configuration.

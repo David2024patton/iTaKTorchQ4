@@ -16,7 +16,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/David2024patton/iTaKTorch/pkg/torch/native"
+	"github.com/David2024patton/iTaKTorchQ4/pkg/torch/native"
 )
 
 // FeatureHub centralizes all Torch engine features.

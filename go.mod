@@ -1,4 +1,4 @@
-module github.com/David2024patton/iTaKTorch
+module github.com/David2024patton/iTaKTorchQ4
 
 go 1.26.0
 

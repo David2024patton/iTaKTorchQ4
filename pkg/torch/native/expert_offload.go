@@ -21,6 +21,7 @@ package native
 import (
 	"fmt"
 	"math"
+	"sort"
 	"sync"
 	"time"
 )
@@ -40,7 +41,7 @@ type ExpertInfo struct {
 	Location   ExpertLocation
 	AccessCount int64
 	LastAccess  time.Time
-	Weights    []float32 // The actual expert weights (gate + up + down FFN)
+	FFN        FFNExpert // The actual expert weights (gate + up + down FFN)
 	WeightSize int       // Bytes
 	Pinned     bool      // Prevent eviction
 }
@@ -51,6 +52,7 @@ type ExpertOffloadConfig struct {
 	TotalExperts     int     // Total number of experts in the model
 	PrefetchTopK     int     // Pre-load this many likely-next experts (default: 2)
 	AccessDecay      float32 // Exponential decay for access frequency (default: 0.99)
+	GlobalPinTopK   int     // Number of globally-hot experts to pin (AEX)
 }
 
 // ExpertOffloadManager manages expert placement across GPU and CPU.
@@ -70,6 +72,9 @@ type ExpertOffloadManager struct {
 	totalEvictions int64
 	cacheHits     int64
 	cacheMisses   int64
+
+	// Phase 33: Fusion Cache
+	fusionCache map[int]*Tensor
 }
 
 // NewExpertOffloadManager creates an expert offload manager.
@@ -77,6 +82,7 @@ func NewExpertOffloadManager(config ExpertOffloadConfig) *ExpertOffloadManager {
 	return &ExpertOffloadManager{
 		config:      config,
 		experts:     make(map[int]*ExpertInfo),
+		fusionCache: make(map[int]*Tensor),
 		gpuExperts:  make(map[int]bool),
 		cpuExperts:  make(map[int]bool),
 		accessFreqs: make(map[int]float64),
@@ -84,15 +90,15 @@ func NewExpertOffloadManager(config ExpertOffloadConfig) *ExpertOffloadManager {
 }
 
 // RegisterExpert registers an expert's weights.
-func (m *ExpertOffloadManager) RegisterExpert(id, layerIdx int, weights []float32) {
+func (m *ExpertOffloadManager) RegisterExpert(id, layerIdx int, ffn FFNExpert) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	info := &ExpertInfo{
 		ID:         id,
 		LayerIdx:   layerIdx,
-		Weights:    weights,
-		WeightSize: len(weights) * 4,
+		FFN:        ffn,
+		WeightSize: ffn.WGate.Size() * 4 * 3, // Approx
 		LastAccess: time.Now(),
 	}
 
@@ -110,13 +116,13 @@ func (m *ExpertOffloadManager) RegisterExpert(id, layerIdx int, weights []float3
 
 // GetExpert retrieves an expert's weights, loading to GPU if needed.
 // Returns the weights and whether this was a cache hit.
-func (m *ExpertOffloadManager) GetExpert(expertID int) ([]float32, bool) {
+func (m *ExpertOffloadManager) GetExpert(expertID int) (FFNExpert, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	info, ok := m.experts[expertID]
 	if !ok {
-		return nil, false
+		return FFNExpert{}, false
 	}
 
 	// Update access tracking.
@@ -126,13 +132,56 @@ func (m *ExpertOffloadManager) GetExpert(expertID int) ([]float32, bool) {
 
 	if info.Location == ExpertOnGPU {
 		m.cacheHits++
-		return info.Weights, true
+		return info.FFN, true
 	}
 
-	// Cache miss: need to load from CPU to GPU.
+	// Cache miss: need to load from CPU to GPU (or just track for AEX).
 	m.cacheMisses++
 	m.promoteToGPU(info)
-	return info.Weights, false
+	return info.FFN, false
+}
+
+// GetFusedOutput retrieves a previously calculated expert output for reuse.
+// This is Phase 33: Cluster Fusion.
+func (m *ExpertOffloadManager) GetFusedOutput(expertID int) (*Tensor, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	t, ok := m.fusionCache[expertID]
+	return t, ok
+}
+
+// PredictNextExperts uses current layer scores to predict experts for the NEXT layer.
+// This is Phase 31: Speculative Gating (AEX-S).
+func (m *ExpertOffloadManager) PredictNextExperts(currentScores []float32) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// 1. Identify "Hot" expert candidates from current distribution.
+	// In most MoEs, expert selection is highly correlated across layers.
+	for i, score := range currentScores {
+		if score > 0.1 { // Threshold for "Significant" expert.
+			// Predict same experts for next layer offset.
+			// In a real implementation, we'd use a more complex correlation matrix.
+			m.AsyncPrefetchToGPU(i)
+		}
+	}
+}
+
+// AsyncPrefetchToGPU starts a background load if the expert is not on GPU.
+func (m *ExpertOffloadManager) AsyncPrefetchToGPU(expertID int) {
+	info, ok := m.experts[expertID]
+	if !ok || info.Location == ExpertOnGPU {
+		return
+	}
+
+	// Start async load.
+	go func(id int) {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		if info.Location == ExpertOnCPU {
+			m.promoteToGPU(info)
+		}
+	}(expertID)
 }
 
 // PrefetchExperts pre-loads experts that the router is likely to select.
@@ -236,6 +285,53 @@ func (m *ExpertOffloadManager) PinExpert(expertID int) {
 	defer m.mu.Unlock()
 	if info, ok := m.experts[expertID]; ok {
 		info.Pinned = true
+	}
+}
+
+// PinTopKExperts identifies the hottest experts across the model and pins them.
+// This implements the Adaptive Expert X-Offload (AEX) strategy.
+func (m *ExpertOffloadManager) PinTopKExperts() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.config.GlobalPinTopK <= 0 {
+		return
+	}
+
+	// 1. Unpin all first.
+	for _, info := range m.experts {
+		info.Pinned = false
+	}
+
+	// 2. Score all experts by frequency.
+	type scored struct {
+		id   int
+		freq float64
+	}
+	all := make([]scored, 0, len(m.accessFreqs))
+	for id, freq := range m.accessFreqs {
+		all = append(all, scored{id, freq})
+	}
+
+	// 3. Sort descending.
+	sort.Slice(all, func(i, j int) bool {
+		return all[i].freq > all[j].freq
+	})
+
+	// 4. Pin top K and ensure they are on GPU.
+	limit := m.config.GlobalPinTopK
+	if limit > len(all) {
+		limit = len(all)
+	}
+
+	for i := 0; i < limit; i++ {
+		id := all[i].id
+		if info, ok := m.experts[id]; ok {
+			info.Pinned = true
+			if info.Location == ExpertOnCPU {
+				m.promoteToGPU(info)
+			}
+		}
 	}
 }
 

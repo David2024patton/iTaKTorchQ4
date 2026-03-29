@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/David2024patton/iTaKTorch/pkg/torch/native"
+	"github.com/David2024patton/iTaKTorchQ4/pkg/torch/native"
 )
 
 // cmdTrain handles the `torch train` subcommand.

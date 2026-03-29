@@ -986,7 +986,7 @@ const landingPageHTML = `<!DOCTYPE html>
     <h3>Ecosystem</h3>
     <div class="eco-links">
       <a class="eco-link" href="https://github.com/David2024patton/iTaKAgent" target="_blank">iTaK Agent</a>
-      <a class="eco-link" href="https://github.com/David2024patton/iTaKTorch" target="_blank">iTaKTorch</a>
+      <a class="eco-link" href="https://github.com/David2024patton/iTaKTorchQ4" target="_blank">iTaKTorch</a>
       <a class="eco-link" href="https://github.com/David2024patton/iTaKBrowser" target="_blank">iTaK Browser</a>
       <a class="eco-link" href="https://github.com/David2024patton/iTaKDashboard" target="_blank">iTaK Dashboard</a>
       <a class="eco-link" href="https://github.com/David2024patton/iTaKMedia" target="_blank">iTaK Media</a>

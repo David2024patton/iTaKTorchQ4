@@ -20,6 +20,7 @@ type MoEConfig struct {
 	NumExperts    int // Total number of expert FFN networks
 	NumActive     int // Number of experts activated per token (top-K)
 	Enabled       bool
+	FusionEnabled bool // Phase 33: Cross-layer expert output reuse
 }
 
 // MoELayer holds the weights for one MoE transformer layer.
@@ -40,9 +41,10 @@ type FFNExpert struct {
 // x: [hidden_dim] - input hidden state for one token
 // layer: MoE layer with gate + experts
 // config: routing parameters
+// manager: optional ExpertOffloadManager for AEX/offloading
 //
 // Returns: [hidden_dim] - weighted sum of top-K expert outputs
-func MoEForward(x *Tensor, layer *MoELayer, config MoEConfig) *Tensor {
+func MoEForward(x *Tensor, layer *MoELayer, config MoEConfig, manager *ExpertOffloadManager) *Tensor {
 	dim := len(x.Data)
 
 	// Step 1: Compute gating logits: gate_logits = x @ Gate
@@ -58,17 +60,41 @@ func MoEForward(x *Tensor, layer *MoELayer, config MoEConfig) *Tensor {
 	// Step 2: Softmax over gate logits.
 	gateProbs := softmaxMoE(gateLogits)
 
-	// Step 3: Select top-K experts.
+	// AEX: Inform the manager of gating scores for prefetching.
+	if manager != nil {
+		manager.PrefetchExperts(gateProbs)
+	}
+
+	// 3. Prefetching for next layers (Speculative Gating AEX-S).
+	if manager != nil {
+		manager.PredictNextExperts(gateLogits)
+	}
+
+	// 4. Select top-K experts.
 	topK := selectTopK(gateProbs, config.NumActive)
 
 	// Step 4: Run selected experts and combine outputs.
 	output := NewTensor([]int{dim})
-	var totalWeight float32
 
+	// Cluster Fusion Cache (Phase 33).
+	// If an expert was recently run in a previous layer, we can fuse its output.
+	if config.FusionEnabled && manager != nil {
+		if fused, ok := manager.GetFusedOutput(topK[0].index); ok {
+			return fused
+		}
+	}
+
+	var totalWeight float32
 	for _, sel := range topK {
-		expert := layer.Experts[sel.index]
+		var expert FFNExpert
+		if manager != nil {
+			expert, _ = manager.GetExpert(sel.index)
+		} else {
+			expert = layer.Experts[sel.index]
+		}
 
 		// FFN: gate-up-down pattern.
+		// Note: MatVecMul automatically handles F32, Q4, and I2_S (Ternary).
 		gate := MatVecMul(expert.WGate, x)
 		up := MatVecMul(expert.WUp, x)
 

@@ -28,7 +28,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/David2024patton/iTaKTorch/pkg/torch/llama"
+	"github.com/David2024patton/iTaKTorchQ4/pkg/torch/llama"
 )
 
 // SpeculativeDecoder manages draft-target model pairs for speculative decoding.

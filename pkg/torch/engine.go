@@ -25,6 +25,8 @@ type Engine interface {
 	SaveKVCache(path string) error
 	// LoadKVCache restores the engine's memory state from disk.
 	LoadKVCache(path string) error
+	// Synthesize converts text to speech audio bytes (MP3/WAV).
+	Synthesize(ctx context.Context, req SpeechRequest) ([]byte, error)
 	// Close unloads the model and frees resources.
 	Close() error
 }
@@ -85,6 +87,11 @@ func (m *MockEngine) SaveKVCache(path string) error {
 
 func (m *MockEngine) LoadKVCache(path string) error {
 	return nil
+}
+
+func (m *MockEngine) Synthesize(ctx context.Context, req SpeechRequest) ([]byte, error) {
+	fmt.Printf("[iTaK Torch Mock] Synthesize: %s\n", req.Input)
+	return []byte("MOCK_AUDIO_DATA"), nil
 }
 
 func (m *MockEngine) Close() error {

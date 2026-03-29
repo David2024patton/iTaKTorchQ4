@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/David2024patton/iTaKTorch/pkg/torch/llama"
+	"github.com/David2024patton/iTaKTorchQ4/pkg/torch/llama"
 )
 
 // VisionEngine extends TorchEngine with multi-modal (vision/audio) support.
@@ -316,14 +316,6 @@ func (e *VisionEngine) Reload() error {
 	return nil
 }
 
-// Close releases all resources including the multi-modal context.
-func (e *VisionEngine) Close() error {
-	if e.mtmdCtx != 0 {
-		llama.MtmdFree(e.mtmdCtx)
-		e.mtmdCtx = 0
-	}
-	return e.TorchEngine.Close()
-}
 
 // ModelName returns the model name with a vision indicator.
 func (e *VisionEngine) ModelName() string {

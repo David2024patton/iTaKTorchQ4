@@ -10,7 +10,6 @@
 package native
 
 import (
-	"encoding/binary"
 	"fmt"
 	"math"
 	"runtime"
@@ -38,8 +37,11 @@ func MatMul(a, b *Tensor) *Tensor {
 	if b.Type == 12 { // ggmlTypeQ4_K
 		return matMulQ4(a, b, m, k, n)
 	}
-	if a.Type == 12 {
-		panic("MatMul: 'A' Tensor is Q4_K, which is unexpected for Activations.")
+	if b.Type == 30 { // ggmlTypeI2_S (BitNet)
+		return matMulI2S(a, b, m, k, n)
+	}
+	if a.Type == 12 || a.Type == 30 {
+		panic("MatMul: 'A' Tensor is quantized, which is unexpected for Activations.")
 	}
 
 	return matMulBlocked(a.Data, b.Data, m, k, n)
@@ -135,6 +137,10 @@ func MatVecMul(a *Tensor, v *Tensor) *Tensor {
 		panic(fmt.Sprintf("MatVecMul: dimension mismatch: A[%d,%d] * v[%d]", m, k, v.Shape[0]))
 	}
 
+	if a.Type == 30 { // BitNet I2_S
+		return matVecMulI2S(a, v, m, k)
+	}
+
 	result := NewTensor([]int{m})
 
 	numWorkers := runtime.NumCPU()
@@ -181,35 +187,115 @@ func matMulQ4(a, b *Tensor, m, k, n int) *Tensor {
 		numWorkers = 1
 	}
 
-	for i := 0; i < m; i++ {
-		aRow := a.Data[i*k : i*k+k]
+	chunk := (n + numWorkers - 1) / numWorkers
+	var wg sync.WaitGroup
 
-		chunk := (n + numWorkers - 1) / numWorkers
-		var wg sync.WaitGroup
+	for w := 0; w < numWorkers; w++ {
+		startJ := w * chunk
+		if startJ >= n {
+			break
+		}
+		endJ := startJ + chunk
+		if endJ > n {
+			endJ = n
+		}
 
-		for w := 0; w < numWorkers; w++ {
-			startJ := w * chunk
-			if startJ >= n {
-				break
-			}
-			endJ := startJ + chunk
-			if endJ > n {
-				endJ = n
-			}
-
-			wg.Add(1)
-			go func(sj, ej int) {
-				defer wg.Done()
+		wg.Add(1)
+		go func(sj, ej int) {
+			defer wg.Done()
+			for i := 0; i < m; i++ {
+				aRow := a.Data[i*k : i*k+k]
 				for j := sj; j < ej; j++ {
 					offset := j * bytesPerRow
 					q4Slice := b.DataQ4[offset : offset+bytesPerRow]
 					result.Data[i*n+j] = Dot_Q4_K(q4Slice, aRow)
 				}
-			}(startJ, endJ)
-		}
-		wg.Wait()
+			}
+		}(startJ, endJ)
 	}
+	wg.Wait()
 	return result
+}
+
+func matMulI2S(a, b *Tensor, m, k, n int) *Tensor {
+	result := NewTensor([]int{m, n})
+	// I2_S uses 32-byte blocks for 128 elements + tailing scale.
+	bytesPerRow := (k / 128) * 32
+	// Note: We ignore the trailing scales here for simplicity in the nested loop,
+	// or we extract the global scale once.
+	globalScale := ExtractScale(b.DataQ4)
+
+	numWorkers := runtime.NumCPU()
+	if numWorkers < 1 { numWorkers = 1 }
+
+	chunk := (n + numWorkers - 1) / numWorkers
+	var wg sync.WaitGroup
+
+	for w := 0; w < numWorkers; w++ {
+		startJ := w * chunk
+		if startJ >= n { break }
+		endJ := startJ + chunk
+		if endJ > n { endJ = n }
+
+		wg.Add(1)
+		go func(sj, ej int) {
+			defer wg.Done()
+			for i := 0; i < m; i++ {
+				aRow := a.Data[i*k : i*k+k]
+				for j := sj; j < ej; j++ {
+					offset := j * bytesPerRow
+					i2sSlice := b.DataQ4[offset : offset+bytesPerRow]
+					result.Data[i*n+j] = dotI2S(i2sSlice, aRow, globalScale)
+				}
+			}
+		}(startJ, endJ)
+	}
+	wg.Wait()
+	return result
+}
+
+func matVecMulI2S(a, v *Tensor, m, k int) *Tensor {
+	result := NewTensor([]int{m})
+	bytesPerRow := (k / 128) * 32
+	globalScale := ExtractScale(a.DataQ4)
+
+	numWorkers := runtime.NumCPU()
+	if numWorkers < 1 { numWorkers = 1 }
+
+	rowsPerWorker := (m + numWorkers - 1) / numWorkers
+	var wg sync.WaitGroup
+
+	for w := 0; w < numWorkers; w++ {
+		startI := w * rowsPerWorker
+		if startI >= m { break }
+		endI := startI + rowsPerWorker
+		if endI > m { endI = m }
+
+		wg.Add(1)
+		go func(si, ei int) {
+			defer wg.Done()
+			for i := si; i < ei; i++ {
+				offset := i * bytesPerRow
+				i2sSlice := a.DataQ4[offset : offset+bytesPerRow]
+				result.Data[i] = dotI2S(i2sSlice, v.Data, globalScale)
+			}
+		}(startI, endI)
+	}
+	wg.Wait()
+	return result
+}
+
+func dotI2S(i2sBuf []byte, x []float32, scale float32) float32 {
+	var sum float32
+	nBlocks := len(i2sBuf) / 32
+
+	for b := 0; b < nBlocks; b++ {
+		offset := b * 32
+		blockBuf := i2sBuf[offset : offset+32]
+		xBlock := x[b*128 : (b+1)*128]
+		sum += TernaryDotBlock(xBlock, blockBuf, 1.0)
+	}
+	return sum * scale
 }
 
 // float16ToFloat32Inline converts a BF16/FP16 value to float32 inline for the Q4 unpacker.
@@ -238,34 +324,15 @@ func float16ToFloat32Inline(h uint16) float32 {
 func Dot_Q4_K(q4Buf []byte, x []float32) float32 {
 	var sum float32
 	nBlocks := len(q4Buf) / 144
-	var scales, mins [8]float32
 
 	for b := 0; b < nBlocks; b++ {
 		offset := b * 144
 		blockBuf := q4Buf[offset : offset+144]
 
-		d := float16ToFloat32Inline(binary.LittleEndian.Uint16(blockBuf[0:2]))
-		dmin := float16ToFloat32Inline(binary.LittleEndian.Uint16(blockBuf[2:4]))
-		scalesRaw := blockBuf[4:16]
-		qs := blockBuf[16:144]
-
-		for subBlock := 0; subBlock < 8; subBlock++ {
-			var sc, mn float32
-			if subBlock < 4 {
-				sc = float32(scalesRaw[subBlock]&0x3F)
-				mn = float32(scalesRaw[subBlock+4]&0x3F)
-			} else {
-				sc = float32((scalesRaw[subBlock+4]&0x0F) | ((scalesRaw[subBlock-4]>>6)<<4))
-				mn = float32((scalesRaw[subBlock+4]>>4) | ((scalesRaw[subBlock]>>6)<<4))
-			}
-			scales[subBlock] = d * sc
-			mins[subBlock] = dmin * mn
-		}
-
 		base := b * 256
 		if base+256 <= len(x) {
 			xBlock := x[base : base+256]
-			sum += dotQ4BlockAVX2(qs, xBlock, &scales, &mins)
+			sum += dotQ4BlockAVX2(blockBuf, xBlock)
 		}
 	}
 	return sum

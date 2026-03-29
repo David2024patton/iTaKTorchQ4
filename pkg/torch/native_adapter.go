@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/David2024patton/iTaKTorch/pkg/torch/native"
+	"github.com/David2024patton/iTaKTorchQ4/pkg/torch/native"
 )
 
 // NativeAdapter wraps a native.NativeEngine to implement the torch.Engine interface.
@@ -102,6 +102,11 @@ func (a *NativeAdapter) SaveKVCache(path string) error {
 // LoadKVCache restores the engine's memory state from disk.
 func (a *NativeAdapter) LoadKVCache(path string) error {
 	return nil // No-op
+}
+
+// Synthesize converts text to speech audio bytes using the GOTensor engine.
+func (a *NativeAdapter) Synthesize(ctx context.Context, req SpeechRequest) ([]byte, error) {
+	return nil, fmt.Errorf("Synthesize not currently supported by GOTensor wrapper")
 }
 
 // Close unloads the model and frees resources.

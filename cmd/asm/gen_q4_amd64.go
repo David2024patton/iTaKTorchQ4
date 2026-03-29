@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	build.Package("github.com/David2024patton/iTaKTorch/pkg/torch/native")
+	build.Package("github.com/David2024patton/iTaKTorchQ4/pkg/torch/native")
 
 	build.TEXT("Dot_Q4_K", build.NOSPLIT, "func(q4Buf []byte, x []float32) float32")
 	build.Doc("Dot_Q4_K computes the vector dot product of a compressed Q4_K_M block and a float32 vector.")

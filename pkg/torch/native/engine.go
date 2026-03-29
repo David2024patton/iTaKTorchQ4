@@ -99,14 +99,33 @@ type NativeEngine struct {
 	// Replaces fixed residual Add with learned depth-wise attention.
 	AttnResConfig AttnResConfig
 
+	// Feature Flags
+	UseAEX         bool
+	UseSpeculative bool
+	UseFusion      bool
+
 	// Advanced features (RoPE, BPE, Flash Attention, MoE, etc.).
 	features  *EngineFeatures
 	maxSeqLen int // Maximum sequence length for RoPE
+
+	// MoE (Mixture of Experts) support.
+	moeConfig   MoEConfig
+	moeLayers   []MoELayer           // MoE layers (one per transformer block)
+	expertMgr   *ExpertOffloadManager // GPU/CPU expert placement manager
 
 	// Weights.
 	embeddings *Tensor // [vocab_size, hidden_dim]
 	layers     []TransformerLayer
 	lmHead     *Tensor // [vocab_size, hidden_dim]
+}
+
+// NativeEngineOpts holds configuration for the native engine.
+type NativeEngineOpts struct {
+	UseAEX         bool
+	UseSpeculative bool
+	UseFusion      bool
+	GPULayers      int
+	Threads        int
 }
 
 // TransformerLayer holds the weights for one transformer block.
@@ -189,12 +208,8 @@ func NewNativeEngine(name string, vocabSize, hiddenDim, numHeads, numLayers int)
 	return e
 }
 
-// NewNativeEngineFromGGUF loads a GGUF model file and populates the engine
-// weights from the file's tensors. For tiny models (<1B params) only.
-//
-// Falls back to random initialization for any tensor not found in the file.
-// Returns an error if the file can't be parsed.
-func NewNativeEngineFromGGUF(path string) (*NativeEngine, error) {
+// NewNativeEngineFromGGUF loads a GGUF model into the native engine.
+func NewNativeEngineFromGGUF(path string, opts ...NativeEngineOpts) (*NativeEngine, error) {
 	gf, err := LoadGGUF(path)
 	if err != nil {
 		return nil, fmt.Errorf("load GGUF: %w", err)
@@ -241,6 +256,13 @@ func NewNativeEngineFromGGUF(path string) (*NativeEngine, error) {
 
 	fmt.Printf("[GOTensor] Model: arch=%s vocab=%d hidden=%d heads=%d kv_heads=%d layers=%d ffn=%d\n",
 		arch, vocabSize, hiddenDim, numHeads, numKVHeads, numLayers, ffnDim)
+
+	// Apply options if provided.
+	if len(opts) > 0 {
+		e.UseAEX = opts[0].UseAEX
+		e.UseSpeculative = opts[0].UseSpeculative
+		e.UseFusion = opts[0].UseFusion
+	}
 
 	// Try to load tensors from the file. Missing tensors keep their random init.
 	loadTensor := func(name string) *Tensor {
@@ -293,6 +315,30 @@ func NewNativeEngineFromGGUF(path string) (*NativeEngine, error) {
 		if t := loadTensor(prefix + ".ffn_norm.weight"); t != nil {
 			e.layers[i].FFNNorm = t
 		}
+	}
+
+	// Phase 29: Detect and initialize MoE if present.
+	moeLayers, moeConfig := LoadMoEFromGGUF(gf)
+	if moeConfig.Enabled {
+		e.moeConfig = moeConfig
+		e.moeLayers = moeLayers
+		
+		// Set fusion flag from options.
+		e.moeConfig.FusionEnabled = e.UseFusion
+
+		if e.UseAEX {
+			e.expertMgr = NewExpertOffloadManager(ExpertOffloadConfig{
+				MaxGPUExperts: moeConfig.NumActive * 2,
+				TotalExperts:  moeConfig.NumExperts,
+				PrefetchTopK:  moeConfig.NumActive,
+				AccessDecay:   0.99,
+				GlobalPinTopK: 4, // AEX: Pin top 4 experts model-wide
+			})
+			fmt.Printf("[GOTensor] AEX Expert Offload active: pinning top experts, speculative_gating=%v\n", e.UseSpeculative)
+		}
+		
+		fmt.Printf("[GOTensor] MoE enabled: %d experts, top-%d routing, fusion=%v\n",
+			moeConfig.NumExperts, moeConfig.NumActive, e.UseFusion)
 	}
 
 	return e, nil
@@ -614,9 +660,19 @@ func (e *NativeEngine) transformerBlock(x *Tensor, layer TransformerLayer, mask 
 		normed2 = RMSNorm(x, layer.FFNNorm, 1e-6)
 	}
 
-	// Sparse or dense FFN based on config.
+	// Sparse, MoE, or dense FFN based on config.
 	var ffnOut *Tensor
-	if e.SparseConfig.Enabled && layerIdx < len(e.predictors) && e.predictors[layerIdx] != nil {
+	if e.moeConfig.Enabled && layerIdx < len(e.moeLayers) && len(e.moeLayers[layerIdx].Experts) > 0 {
+		// MoE routing: use gating network to select top-K experts.
+		// Process only the last position for autoregressive generation.
+		lastPos := NewTensor([]int{e.hiddenDim})
+		copy(lastPos.Data, normed2.Data[(seqLen-1)*e.hiddenDim:seqLen*e.hiddenDim])
+		ffnOut = MoEForward(lastPos, &e.moeLayers[layerIdx], e.moeConfig, e.expertMgr)
+		// Broadcast single-position output back to full sequence.
+		fullOut := NewTensor([]int{seqLen, e.hiddenDim})
+		copy(fullOut.Data[(seqLen-1)*e.hiddenDim:], ffnOut.Data)
+		ffnOut = fullOut
+	} else if e.SparseConfig.Enabled && layerIdx < len(e.predictors) && e.predictors[layerIdx] != nil {
 		ffnOut = SparseFFN(normed2, layer, e.predictors[layerIdx], e.SparseConfig)
 	} else if useGPU {
 		// GPU-accelerated dense FFN.

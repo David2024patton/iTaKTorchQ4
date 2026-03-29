@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/David2024patton/iTaKTorch/pkg/torch/llama"
+	"github.com/David2024patton/iTaKTorchQ4/pkg/torch/llama"
 )
 
 // SlotState represents the lifecycle of a slot.

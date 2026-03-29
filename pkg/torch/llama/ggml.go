@@ -3,7 +3,7 @@ package llama
 import (
 	"errors"
 
-	"github.com/David2024patton/iTaKTorch/pkg/torch/utils"
+	"github.com/David2024patton/iTaKTorchQ4/pkg/torch/utils"
 	"github.com/ebitengine/purego"
 )
 

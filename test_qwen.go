@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/David2024patton/iTaKTorch/pkg/torch"
+	"github.com/David2024patton/iTaKTorchQ4/pkg/torch"
 )
 
 func main() {

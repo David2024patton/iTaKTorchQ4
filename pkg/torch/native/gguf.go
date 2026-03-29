@@ -59,7 +59,8 @@ const (
 	ggmlTypeQ4_K uint32 = 12
 	ggmlTypeQ5_K uint32 = 13
 	ggmlTypeQ6_K uint32 = 14
-	ggmlTypeBF16 uint32 = 30
+	ggmlTypeI2_S uint32 = 30 // BitNet 1.58-bit Ternary
+	ggmlTypeBF16 uint32 = 31 // Shifted to 31 to avoid collision with BitNet
 )
 
 // ggmlBlockSize returns the number of elements per quantization block.
@@ -105,6 +106,8 @@ func ggmlBytesPerBlock(dtype uint32) int {
 		return 176
 	case ggmlTypeQ6_K:
 		return 210
+	case ggmlTypeI2_S:
+		return 32 // 128 elements in 32 bytes (2 bits/elem)
 	default:
 		return 0
 	}
@@ -340,6 +343,27 @@ func (gf *GGUFFile) ReadTensor(info GGUFTensorInfo) (*Tensor, error) {
 		if err := dequantQ6_K(f, data, totalElements); err != nil {
 			return nil, fmt.Errorf("dequant Q6_K: %w", err)
 		}
+
+	case ggmlTypeI2_S:
+		// --- BitNet I2_S INTERCEPTION ---
+		// We read the raw ternary blocks directly for our SIMD kernels.
+		bytesPerBlock := 32
+		numBlocks := totalElements / 128
+		if totalElements%128 != 0 {
+			return nil, fmt.Errorf("I2_S total elements %d not divisible by 128", totalElements)
+		}
+		dataI2S := make([]byte, numBlocks*uint64(bytesPerBlock))
+		if _, err := io.ReadFull(f, dataI2S); err != nil {
+			return nil, fmt.Errorf("read I2_S raw bytes: %w", err)
+		}
+
+		fmt.Printf("[GOTensor] ⚡ Loaded BitNet Tensor '%s' (ternary i2_s)\n", info.Name)
+		
+		shape := make([]int, len(info.Dimensions))
+		for i, d := range info.Dimensions {
+			shape[i] = int(d)
+		}
+		return &Tensor{Type: ggmlTypeI2_S, DataQ4: dataI2S, Shape: shape, Strides: calculateStrides(shape)}, nil
 
 	default:
 		return nil, fmt.Errorf("unsupported tensor type %d", info.Type)

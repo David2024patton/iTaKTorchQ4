@@ -11,8 +11,8 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/David2024patton/iTaKTorch/pkg/torch/llama"
-	"github.com/David2024patton/iTaKTorch/pkg/torch/tokenizer"
+	"github.com/David2024patton/iTaKTorchQ4/pkg/torch/llama"
+	"github.com/David2024patton/iTaKTorchQ4/pkg/torch/tokenizer"
 )
 
 // TorchEngine implements the Engine interface using the forked yzma/llama.cpp
@@ -456,7 +456,6 @@ func NewTorchEngine(modelPath string, opts EngineOpts) (*TorchEngine, error) {
 	return engine, nil
 }
 
-
 // Complete runs inference on the given messages and returns the generated text.
 func (e *TorchEngine) Complete(ctx context.Context, messages []ChatMessage, params CompletionParams) (string, error) {
 	e.mu.Lock()
@@ -524,13 +523,6 @@ func (e *TorchEngine) GenerateTokens(ctx context.Context, inputTokens []int32, p
 }
 
 // generateFromTokensLocked implements the core generation loop. The caller must hold e.mu.Lock().
-//
-// systemPrefix: the rendered system prompt text (for prefix cache hashing).
-// prefixTokenCount: how many tokens the system prefix covers.
-// When both are set and prefix is >= 32 tokens, true prefix caching is used:
-//   - Cache HIT: restore prefix KV state, decode only tokens[prefixTokenCount:]
-//   - Cache MISS: decode prefix tokens, save KV state, then decode remaining tokens
-// When no prefix is available, falls back to full-prompt decode.
 func (e *TorchEngine) generateFromTokensLocked(ctx context.Context, prompt string, tokens []llama.Token, params CompletionParams, systemPrefix string, prefixTokenCount int) (string, error) {
 	// Reset sampler state for this request.
 	llama.SamplerReset(e.sampler)
@@ -540,10 +532,7 @@ func (e *TorchEngine) generateFromTokensLocked(ctx context.Context, prompt strin
 		maxTokens = 512
 	}
 
-	// --- True Prefix Caching ---
-	// Minimum 32 prefix tokens to avoid save/restore overhead on trivial prefixes.
 	const minPrefixTokens = 32
-
 	promptStart := time.Now()
 	prefixCacheHit := false
 	var batch llama.Batch
@@ -559,19 +548,15 @@ func (e *TorchEngine) generateFromTokensLocked(ctx context.Context, prompt strin
 		prefixTokenCount < len(tokens)
 
 	if usePrefixCache {
-		// Check if we have cached KV state for this system prefix.
 		if entry, ok := e.prefixCache.Lookup(systemPrefix); ok {
 			if _, err := e.prefixCache.Restore(e.ctx, entry); err == nil {
 				prefixCacheHit = true
-				prefixPct := float64(prefixTokenCount) / float64(len(tokens)) * 100
-				fmt.Printf("[iTaK Torch] Prefix cache HIT: %d/%d tokens cached (%.0f%% prompt skipped)\n",
-					prefixTokenCount, len(tokens), prefixPct)
+				fmt.Printf("[iTaK Torch] Prefix cache HIT: %d tokens cached\n", prefixTokenCount)
 			}
 		}
 	}
 
 	if prefixCacheHit {
-		// Prefix HIT: only decode the remaining (non-system) tokens.
 		remaining := tokens[prefixTokenCount:]
 		for i := 0; i < len(remaining); i += batchSize {
 			end := i + batchSize
@@ -581,12 +566,10 @@ func (e *TorchEngine) generateFromTokensLocked(ctx context.Context, prompt strin
 			chunk := remaining[i:end]
 			batch = llama.BatchGetOne(chunk)
 			if _, err := llama.Decode(e.ctx, batch); err != nil {
-				return "", fmt.Errorf("decode remaining chunk [%d:%d]: %w", i, end, err)
+				return "", fmt.Errorf("decode remaining chunk: %w", err)
 			}
 		}
 	} else if usePrefixCache {
-		// Prefix MISS: decode prefix tokens first, save KV state, then decode the rest.
-		// Step 1: Decode only the prefix tokens.
 		prefixTokens := tokens[:prefixTokenCount]
 		for i := 0; i < len(prefixTokens); i += batchSize {
 			end := i + batchSize
@@ -596,19 +579,10 @@ func (e *TorchEngine) generateFromTokensLocked(ctx context.Context, prompt strin
 			chunk := prefixTokens[i:end]
 			batch = llama.BatchGetOne(chunk)
 			if _, err := llama.Decode(e.ctx, batch); err != nil {
-				return "", fmt.Errorf("decode prefix chunk [%d:%d]: %w", i, end, err)
+				return "", fmt.Errorf("decode prefix chunk: %w", err)
 			}
 		}
-
-		// Step 2: Save the prefix KV state for future requests.
-		if err := e.prefixCache.Save(e.ctx, systemPrefix, prefixTokens); err != nil {
-			fmt.Printf("[iTaK Torch] Prefix cache save warning: %v\n", err)
-		} else {
-			fmt.Printf("[iTaK Torch] Prefix cache saved: %d tokens (hash=%s)\n",
-				prefixTokenCount, hashPrompt(systemPrefix)[:12])
-		}
-
-		// Step 3: Decode the remaining tokens.
+		e.prefixCache.Save(e.ctx, systemPrefix, prefixTokens)
 		remaining := tokens[prefixTokenCount:]
 		for i := 0; i < len(remaining); i += batchSize {
 			end := i + batchSize
@@ -618,12 +592,10 @@ func (e *TorchEngine) generateFromTokensLocked(ctx context.Context, prompt strin
 			chunk := remaining[i:end]
 			batch = llama.BatchGetOne(chunk)
 			if _, err := llama.Decode(e.ctx, batch); err != nil {
-				return "", fmt.Errorf("decode remaining chunk [%d:%d]: %w", i, end, err)
+				return "", fmt.Errorf("decode remaining chunk: %w", err)
 			}
 		}
 	} else {
-		// No prefix caching: decode all tokens in one pass (original behavior).
-		// Ubatch prompt processing: split long prompts into BatchSize-sized chunks.
 		for i := 0; i < len(tokens); i += batchSize {
 			end := i + batchSize
 			if end > len(tokens) {
@@ -632,207 +604,38 @@ func (e *TorchEngine) generateFromTokensLocked(ctx context.Context, prompt strin
 			chunk := tokens[i:end]
 			batch = llama.BatchGetOne(chunk)
 			if _, err := llama.Decode(e.ctx, batch); err != nil {
-				return "", fmt.Errorf("decode prompt chunk [%d:%d]: %w", i, end, err)
+				return "", fmt.Errorf("decode prompt chunk: %w", err)
 			}
 		}
 	}
 	promptDuration := time.Since(promptStart)
 
-	// Generate tokens.
-	// Phase 3: Async GPU/CPU overlap pattern (from Ollama PR #11863).
-	// Instead of blocking on each Decode, we let the GPU work asynchronously
-	// and only Synchronize when we need to read results (before SamplerSample).
-	// This keeps the GPU busy while we do CPU-side work (token convert, stop check, batch prep).
 	genStart := time.Now()
 	var result strings.Builder
 	completionTokens := 0
 	hasStopSequences := len(params.Stop) > 0
-
-	// Pre-allocate a reusable single-token slice for the decode batch.
-	// This avoids allocating a new []Token{token} on every iteration.
 	singleToken := make([]llama.Token, 1)
 
-	// Speculative decoding counters.
-	specDraftTotal := 0
-	specAcceptTotal := 0
-	specRounds := 0
-
-	// Pre-compute max stop sequence length for tail-only checking.
-	maxStopLen := 0
-	if hasStopSequences {
-		for _, s := range params.Stop {
-			if len(s) > maxStopLen {
-				maxStopLen = len(s)
-			}
-		}
-	}
-
 	for i := 0; i < maxTokens; i++ {
-		// Check context cancellation.
 		select {
 		case <-ctx.Done():
 			return result.String(), ctx.Err()
 		default:
 		}
 
-		// --- Speculative Decoding Path ---
-		// Draft-first pattern: draft model generates N candidates, main model
-		// verifies them all in one batch pass. Matching tokens are accepted for
-		// free, giving up to N+1 tokens per main-model forward pass.
-		if e.hasDraft && i > 0 {
-			specTokens := e.opts.SpeculativeTokens
-			if specTokens == 0 {
-				specTokens = 5
-			}
-
-			// Step 1: Sample the next token from the main model (already decoded).
-			llama.Synchronize(e.ctx)
-			seedToken := llama.SamplerSample(e.sampler, e.ctx, -1)
-			if e.isEOG(seedToken) {
-				break
-			}
-
-			// Emit seed token.
-			piece := e.tokenToText(seedToken)
-			if len(piece) > 0 {
-				result.WriteString(piece)
-				completionTokens++
-				if e.streamCh != nil {
-					select {
-					case e.streamCh <- piece:
-					case <-ctx.Done():
-						return result.String(), ctx.Err()
-					}
-				}
-			}
-
-			// Step 2: Feed seed token to draft model and generate N draft candidates.
-			draftBatch := llama.BatchGetOne([]llama.Token{seedToken})
-			llama.Decode(e.draftCtx, draftBatch)
-
-			draftTokens := make([]llama.Token, 0, specTokens)
-			for d := 0; d < specTokens && (i+1+d) < maxTokens; d++ {
-				llama.Synchronize(e.draftCtx)
-				dt := llama.SamplerSample(e.draftSampler, e.draftCtx, -1)
-				if e.isEOG(dt) {
-					break
-				}
-				draftTokens = append(draftTokens, dt)
-				db := llama.BatchGetOne([]llama.Token{dt})
-				llama.Decode(e.draftCtx, db)
-			}
-
-			specDraftTotal += len(draftTokens)
-			specRounds++
-
-			if len(draftTokens) == 0 {
-				// Draft model hit EOG immediately. Push seed through main model.
-				batch = llama.BatchGetOne([]llama.Token{seedToken})
-				llama.Decode(e.ctx, batch)
-				i++ // count the seed token iteration
-				continue
-			}
-
-			// Step 3: Verify draft tokens with main model in one batch.
-			// Feed seed + drafts so main model has logits at each position.
-			verifyTokens := make([]llama.Token, 0, len(draftTokens)+1)
-			verifyTokens = append(verifyTokens, seedToken)
-			verifyTokens = append(verifyTokens, draftTokens...)
-			verifyBatch := llama.BatchGetOne(verifyTokens)
-			llama.Decode(e.ctx, verifyBatch)
-			llama.Synchronize(e.ctx)
-
-			// Step 4: Accept matching tokens, reject from first mismatch.
-			accepted := 0
-			for idx, dt := range draftTokens {
-				// Sample main model's prediction at position idx+1
-				// (idx 0 is the seed token's logits, idx 1+ are for drafts).
-				mainToken := llama.SamplerSample(e.sampler, e.ctx, int32(idx+1))
-				if mainToken == dt {
-					// Match! Accept this token for free.
-					piece := e.tokenToText(dt)
-					if len(piece) > 0 {
-						result.WriteString(piece)
-						completionTokens++
-						if e.streamCh != nil {
-							select {
-							case e.streamCh <- piece:
-							case <-ctx.Done():
-								return result.String(), ctx.Err()
-							}
-						}
-					}
-					accepted++
-				} else {
-					// Mismatch. Use the main model's token instead.
-					piece := e.tokenToText(mainToken)
-					if len(piece) > 0 {
-						result.WriteString(piece)
-						completionTokens++
-						if e.streamCh != nil {
-							select {
-							case e.streamCh <- piece:
-							case <-ctx.Done():
-								return result.String(), ctx.Err()
-							}
-						}
-					}
-					accepted++ // count the correction token too
-					break
-				}
-			}
-
-			specAcceptTotal += accepted
-			i += accepted // +1 for seed already counted above
-
-			// Step 5: Reset draft model context for next round.
-			// Clear KV cache to prevent position drift.
-			if mem, err := llama.GetMemory(e.draftCtx); err == nil {
-				llama.MemoryClear(mem, true)
-			}
-			llama.SamplerReset(e.draftSampler)
-
-			// Prepare main model state: decode the last accepted token.
-			if accepted > 0 {
-				var lastAccepted llama.Token
-				if accepted <= len(draftTokens) {
-					lastAccepted = draftTokens[accepted-1]
-				} else {
-					lastAccepted = seedToken
-				}
-				batch = llama.BatchGetOne([]llama.Token{lastAccepted})
-				llama.Decode(e.ctx, batch)
-			}
-
-			continue
-		}
-
-		// --- Standard Sequential Path (no draft model) ---
-
-		// Synchronize: wait for any pending GPU computation to finish
-		// before reading results. On the first iteration this is a no-op
-		// since prompt decode completed synchronously above.
 		if i > 0 {
 			llama.Synchronize(e.ctx)
 		}
 
-		// Sample next token from the FFI sampler (keeps computation on GPU).
-		// Using SamplerSample() directly avoids GPU->CPU logits transfer
-		// and Go-side argmax over 151k vocabulary on every token.
 		token := llama.SamplerSample(e.sampler, e.ctx, -1)
-
-		// Check for end of generation.
 		if e.isEOG(token) {
 			break
 		}
 
-		// Convert token to text.
-		// Phase 4A: Go-native lookup (zero FFI, zero alloc via string interning).
 		piece := e.tokenToText(token)
 		if len(piece) > 0 {
 			result.WriteString(piece)
 			completionTokens++
-			// Stream token delta if streaming is active.
 			if e.streamCh != nil {
 				select {
 				case e.streamCh <- piece:
@@ -842,76 +645,46 @@ func (e *TorchEngine) generateFromTokensLocked(ctx context.Context, prompt strin
 			}
 		}
 
-		// Phase 3: Only check stop sequences when they exist.
-		// Tail-only check: examine only the last maxStopLen bytes of output
-		// instead of copying the entire buffer every token.
 		if hasStopSequences {
-			bufLen := result.Len()
-			if bufLen >= maxStopLen {
-				// Only copy the tail for comparison, not the full buffer.
-				fullText := result.String()
-				tail := fullText[bufLen-maxStopLen:]
-				for _, stop := range params.Stop {
-					if strings.HasSuffix(tail, stop) {
-						// Remove the stop sequence from output.
-						result.Reset()
-						result.WriteString(fullText[:bufLen-len(stop)])
-						return result.String(), nil
-					}
+			fullText := result.String()
+			for _, stop := range params.Stop {
+				if strings.HasSuffix(fullText, stop) {
+					result.Reset()
+					result.WriteString(fullText[:len(fullText)-len(stop)])
+					return result.String(), nil
 				}
 			}
 		}
 
-		// Prepare next batch with the sampled token and issue decode.
-		// Reuse pre-allocated singleToken slice to avoid per-token allocation.
-		// Decode returns immediately on CUDA/Vulkan - GPU works asynchronously
-		// while we loop back to do CPU work (cancel check, etc).
 		singleToken[0] = token
 		batch = llama.BatchGetOne(singleToken)
 		if _, err := llama.Decode(e.ctx, batch); err != nil {
-			return result.String(), fmt.Errorf("decode token %d: %w", i, err)
+			return result.String(), fmt.Errorf("decode token: %w", err)
 		}
 	}
 
 	genDuration := time.Since(genStart)
-	totalDuration := promptDuration + genDuration
-
-	// Calculate tok/s.
 	tokPerSec := 0.0
 	if genDuration.Seconds() > 0 {
 		tokPerSec = float64(completionTokens) / genDuration.Seconds()
 	}
 
-	// Record metrics.
-	// Compute speculative acceptance rate.
-	specAcceptRate := 0.0
-	if specDraftTotal > 0 {
-		specAcceptRate = float64(specAcceptTotal) / float64(specDraftTotal) * 100
-	}
-
 	metrics := &InferenceMetrics{
-		PromptTokens:       len(tokens),
-		CompletionTokens:   completionTokens,
-		TotalTokens:        len(tokens) + completionTokens,
-		PromptDuration:     promptDuration,
-		GenDuration:        genDuration,
-		TotalDuration:      totalDuration,
-		TokensPerSecond:    tokPerSec,
-		SpecDraftTokens:    specDraftTotal,
-		SpecAcceptedTokens: specAcceptTotal,
-		SpecAcceptRate:     specAcceptRate,
-		SpecRounds:         specRounds,
+		PromptTokens:     len(tokens),
+		CompletionTokens: completionTokens,
+		TotalTokens:      len(tokens) + completionTokens,
+		PromptDuration:   promptDuration,
+		GenDuration:      genDuration,
+		TotalDuration:    promptDuration + genDuration,
+		TokensPerSecond:  tokPerSec,
 	}
 	e.Stats.RecordRequest(metrics)
-
-	// Print metrics to CLI.
 	fmt.Printf("%s\n", metrics.String())
 
 	return result.String(), nil
 }
 
-// CompleteStream runs inference and sends each token delta to the provided channel.
-// The channel is closed when generation completes. The full result is also returned.
+// CompleteStream runs inference and sends tokens to a channel.
 func (e *TorchEngine) CompleteStream(ctx context.Context, messages []ChatMessage, params CompletionParams, ch chan string) (string, error) {
 	e.streamCh = ch
 	defer func() {
@@ -921,97 +694,68 @@ func (e *TorchEngine) CompleteStream(ctx context.Context, messages []ChatMessage
 	return e.Complete(ctx, messages, params)
 }
 
-// GetStats returns a snapshot of engine performance stats.
 func (e *TorchEngine) GetStats() EngineStats {
 	return e.Stats.Snapshot()
 }
 
-// ModelName returns the name of the loaded model.
 func (e *TorchEngine) ModelName() string {
 	return e.modelName
 }
 
-// IsLoaded returns true if the engine is currently loaded in memory.
 func (e *TorchEngine) IsLoaded() bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.loaded
 }
 
-// Reload reloads the model into memory if it was previously closed via TTL.
 func (e *TorchEngine) Reload() error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-
 	if e.loaded {
 		return nil
 	}
-
-	// Create a new temporary engine to run the complex loading logic
 	tmp, err := NewTorchEngine(e.modelPath, e.opts)
 	if err != nil {
 		return err
 	}
-
-	// Swap the pointers
 	e.model = tmp.model
 	e.ctx = tmp.ctx
 	e.vocab = tmp.vocab
 	e.sampler = tmp.sampler
 	e.loaded = true
-	
-	e.draftModel = tmp.draftModel
-	e.draftCtx = tmp.draftCtx
-	e.draftVocab = tmp.draftVocab
-	e.draftSampler = tmp.draftSampler
-	e.hasDraft = tmp.hasDraft
-	
-	e.goTokenizer = tmp.goTokenizer
-	e.hasGoTokenizer = tmp.hasGoTokenizer
-	
-	e.prefixCache = tmp.prefixCache
-	e.chatTemplate = tmp.chatTemplate
-
 	return nil
 }
 
-// Close unloads the model and frees all resources.
 func (e *TorchEngine) Close() error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-
 	if !e.loaded {
 		return nil
 	}
-
-	// Free draft model resources if speculative decoding was enabled.
 	if e.hasDraft {
 		llama.ModelFree(e.draftModel)
 		e.hasDraft = false
 	}
-
 	llama.Close()
 	e.loaded = false
 	return nil
 }
 
-// detectIntegratedGPU checks for Intel/AMD iGPUs via WMI (Windows) or lspci (Linux).
+
+
+// Synthesize converts text to speech audio bytes using Go-native iTaK Torch kernels.
+func (e *TorchEngine) Synthesize(ctx context.Context, req SpeechRequest) ([]byte, error) {
+	return nil, fmt.Errorf("Go-native GGUF-TTS synthesis is in development. Use 'itak' engine architecture for live synthesis.")
+}
+
 func detectIntegratedGPU() (bool, error) {
 	if runtime.GOOS == "windows" {
-		// Simple check for Intel/AMD in video controller names
-		// This is a naive check; a robust one would use WMI directly but this suffices for "auto".
-		// We rely on the caller to check for discrete GPUs first.
-		// In a real implementation, we'd exec `wmic path win32_videocontroller get name`.
-		// For now, let's assume we can check environment or just default safely.
-		// NOTE: Without a direct WMI call here, we can't truly know. 
-		// Let's implement a quick exec check.
 		out, err := execCommand("wmic", "path", "win32_videocontroller", "get", "name")
 		if err == nil {
 			s := strings.ToLower(string(out))
 			return strings.Contains(s, "intel") || strings.Contains(s, "amd") || strings.Contains(s, "radeon"), nil
 		}
 	}
-	// Linux/Mac implementation omitted for brevity in this snippet
 	return false, nil
 }
 

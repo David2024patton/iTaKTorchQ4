@@ -3,7 +3,7 @@ package llama
 import (
 	"fmt"
 
-	"github.com/David2024patton/iTaKTorch/pkg/torch/loader"
+	"github.com/David2024patton/iTaKTorchQ4/pkg/torch/loader"
 )
 
 var libPath string
