@@ -20,3 +20,7 @@ wgpu_build*.txt
 # Massive Directories
 models/
 lib/
+
+# Keep releases
+!releases/
+!releases/*
