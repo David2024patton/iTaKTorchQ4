@@ -22,15 +22,21 @@
 
 ### Installation
 
-Choose the pre-compiled binary for your architecture from the `releases/` directory in this repository:
+Download the pre-compiled binary for your architecture directly from the repository:
 
-- **Windows (x64)**: [torch-windows-amd64.exe](file:///E:/.agent/iTaK%20Eco/Torch-Q4-Engine/releases/torch-windows-amd64.exe)
-- **Linux (x64)**: [torch-linux-amd64](file:///E:/.agent/iTaK%20Eco/Torch-Q4-Engine/releases/torch-linux-amd64)
-- **macOS (Intel)**: [torch-darwin-amd64](file:///E:/.agent/iTaK%20Eco/Torch-Q4-Engine/releases/torch-darwin-amd64)
-- **macOS (Apple Silicon)**: [torch-darwin-arm64](file:///E:/.agent/iTaK%20Eco/Torch-Q4-Engine/releases/torch-darwin-arm64)
+- **Windows (x64)**: [torch-windows-amd64.exe](https://github.com/David2024patton/iTaKTorchQ4/raw/main/releases/torch-windows-amd64.exe)
+- **Linux (x64)**: [torch-linux-amd64](https://github.com/David2024patton/iTaKTorchQ4/raw/main/releases/torch-linux-amd64)
+- **macOS (Intel)**: [torch-darwin-amd64](https://github.com/David2024patton/iTaKTorchQ4/raw/main/releases/torch-darwin-amd64)
+- **macOS (Apple Silicon)**: [torch-darwin-arm64](https://github.com/David2024patton/iTaKTorchQ4/raw/main/releases/torch-darwin-arm64)
 
 > [!NOTE]
 > For GPU acceleration, ensure the corresponding `wgpu-native` shared library (e.g., `wgpu_native.dll` or `libwgpu_native.so`) is present in your system path or the same directory as the binary.
+
+## 📖 Documentation
+
+Explore the repository for technical details:
+- [Architecture Overview](./docs/ARCHITECTURE.md)
+- [Hardware Benchmarks](./docs/BENCHMARKS.md)
 
 ### Usage
 
@@ -46,7 +52,7 @@ Choose the pre-compiled binary for your architecture from the `releases/` direct
 
 ## 🏗️ Architecture
 
-iTaK Torch uses the `GOTensor` library for efficient tensor operations and `purego` for hardware abstraction. It is designed to be the "Stable Baseline" for local AI orchestration.
+iTaK Torch uses the `GOTensor` library for efficient tensor operations and `purego` for hardware-abstraction. It is designed to be the "Stable Baseline" for local AI orchestration.
 
 ---
 *Developed by David Patton as part of the iTaK Eco system.*
