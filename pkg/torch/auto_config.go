@@ -102,6 +102,19 @@ func DetectAutoConfig(modelPath string) AutoConfig {
 		ac.Threads = DetectOptimalThreads(modelSizeMB, 999)
 		reasons = append(reasons, fmt.Sprintf("AMD discrete %dMiB >= needed %dMiB -> full Vulkan offload", gpus.BestVRAMMiB, vramNeededMiB))
 
+	// Case 3b: Discrete AMD GPU but model too large for VRAM -> CPU-only,
+	// mirroring the NVIDIA rule (split offload is slower than CPU-only).
+	// Before this case existed, an oversized model on AMD fell through to
+	// the default and reported "no compatible GPU detected" even though a
+	// discrete card was sitting right there.
+	case gpus.HasAMD && gpus.BestDiscreteIdx >= 0 && gpus.BestVRAMMiB > 0:
+		ac.Backend = "cpu"
+		ac.LibDir = ""
+		ac.GPULayers = 0
+		ac.ModelFitsGPU = false
+		ac.Threads = DetectOptimalThreads(modelSizeMB, 0)
+		reasons = append(reasons, fmt.Sprintf("AMD discrete %dMiB < needed %dMiB -> CPU-only (split offload is slower)", gpus.BestVRAMMiB, vramNeededMiB))
+
 	// Case 4: Apple Silicon -> Metal (unified memory, always fits).
 	case runtime.GOOS == "darwin" && runtime.GOARCH == "arm64":
 		ac.Backend = "metal"
